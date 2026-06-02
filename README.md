@@ -46,4 +46,4 @@ The logos and the flag graphic all use proper vector paths now, no font files ne
 
 ## License
 
-GNU General Public License v2. The theme code itself is open source. The CSD Darmstadt branding and vielbunt logos belong to vielbunt e.V.
+The CSD Darmstadt branding and vielbunt logos belong to vielbunt e.V.
