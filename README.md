@@ -1,41 +1,49 @@
-# CSD Darmstadt – WordPress Block-Child-Theme
+# CSD Darmstadt WordPress Theme
 
-Block-Child-Theme auf Basis von **Twenty Twenty-Five** für [csd-darmstadt.de](https://www.csd-darmstadt.de).  
-Veranstaltet von [vielbunt e.V.](https://www.vielbunt.org) – AK Öffentlichkeitsarbeit.
+This is our custom WordPress theme for csd-darmstadt.de. It's built on top of Twenty Twenty-Five and maintained by the vielbunt e.V. web team.
 
-## Installation
+## Setup
 
-1. **Eltern-Theme installieren:** In WordPress unter *Design → Themes → Theme hinzufügen* nach „Twenty Twenty-Five" suchen und installieren (muss vorhanden, aber nicht aktiviert sein).
-2. **Dieses Theme hochladen:** Die ZIP-Datei unter *Design → Themes → Theme hinzufügen → Theme hochladen* einspielen und aktivieren.
-3. **Cera Pro:** Die Schrift wird automatisch aus der Mediathek geladen (`/wp-content/uploads/2021/01/`). Keine Font-Dateien im Theme (Lizenz).
-4. **Menü zuweisen:** Im Site-Editor den Navigations-Block im Header öffnen und das bestehende Menü von csd-darmstadt.de auswählen.
-5. **Startseite setzen:** Unter *Einstellungen → Lesen* „Eine statische Seite" wählen – das Template `front-page` greift automatisch.
+1. Make sure Twenty Twenty-Five is installed (it doesn't have to be active, just present).
+2. Upload this theme via Design > Themes > Theme hinzufügen > Theme hochladen and activate it.
+3. The font (PT Sans) loads automaticaly from Google Fonts, nothing to do there.
+4. Go to Design > Editor and assign the correct navigation to the header nav block. It should pick up "Hauptnavigation" on its own but if it dosn't, just select it manually in the sidebar.
+5. Under Einstellungen > Lesen, set a static front page so the front-page template kicks in.
 
-## Dynamische Blöcke
+## Our custom blocks
 
-| Block | Beschreibung |
+We built these as server-side rendered blocks, so they show up correctly in the editor without needing a build step.
+
+| Block | What it does |
 |---|---|
-| `csd/hero` | Startseiten-Hero mit Jahresgrafik rechts, Hintergrundbild im Editor wählbar |
-| `csd/quicklinks` | 8 Schnellzugriff-Kacheln, Hintergrundbilder im Editor wählbar |
-| `csd/events` | Letzte 8 Beiträge als Kacheln (Foto oder Farb-Kachel mit Datum) |
-| `csd/feed` | Letzte 6 Beiträge als Liste |
-| `csd/logo` | `variant="csd"` → CSD-Logo, `variant="vielbunt"` → vielbunt-Logo |
-| `csd/footerlinks` | Footer-Navigationslinks |
-| `csd/post-hero` | Hero für Einzel-Beiträge und Seiten |
+| `csd/hero` | the big hero section at the top of the front page. texts, buttons and background image are all editable in the site editor |
+| `csd/quicklinks` | the 8 coloured quick access tiles. title and URL are editable per tile in the site editor |
+| `csd/events` | the announcements grid, shows the 8 latest posts as tiles |
+| `csd/feed` | the "Weitere Ankündigungen" section, shows full post content starting from post 9 |
+| `csd/logo` | logo block, use `variant="csd"` for the CSD logo or `variant="vielbunt"` for the vielbunt logo |
+| `csd/footerlinks` | the footer nav links |
+| `csd/post-hero` | the purple hero banner on single posts and pages |
 
-## Jahresgrafik im Hero
+## Editing the Schnellzugriff and Hero in WordPress
 
-Die Datei `assets/flag-pic-2026.svg` ist der Platzhalter für die jährliche CSD-Grafik
-(Rainbow Flag + Datum). Für optimale Darstellung eine Version mit **transparentem Hintergrund**
-erstellen und diese Datei ersetzen – kein Code-Änderung nötig.
+Just open Design > Editor, click on the block you want to edit and look at the right sidebar. The CSD Hero block has panels for "Texte", "Buttons" and "Hintergrundbild". The Schnellzugriff block has one collapsable panel per tile where you can change the title and URL. Colors and icons are fixed in the PHP and woud need a code change.
 
-## Farben
+## The yearly flag graphic
 
-Primärfarbe: **CSD Lila `#6546B4`** (registriert als `--wp--preset--color--purple`).
-Der Slug `pink` ist im Theme ebenfalls auf `#6546B4` gesetzt, damit alle CSS-Referenzen
-des Basis-Frameworks funktionieren.
+We keep the annual CSD graphic at `assets/flag-pic-2026.svg`. All the text in that file has been converted to paths already so it renders corectly without needing any fonts installed. When we make a new version for 2027, just replace that file and the hero will pick it up automaticaly.
 
-## Lizenzhinweis Cera Pro
+## Colors
 
-Die Schriftart ist lizenziert für vielbunt-Kontexte. Keine Schriftdateien im Theme –
-geladen per `@font-face` aus der Mediathek. Pfad ggf. in `functions.php` anpassen.
+The main brand color is CSD purple `#6546B4`. In the theme it's registered under two slugs, `purple` and `pink`, both pointing to the same value. The `pink` slug exists becuase a lot of the base CSS uses it by name and we didnt want to rename everything.
+
+## Font
+
+We load PT Sans from Google Fonts. Two weights, 400 and 700, both with italic variants. If the site ever needs to work fully offline or without Google, we'd have to self-host the font files.
+
+## Cera Pro note
+
+The logos and the flag graphic all use proper vector paths now, no font files needed. We converted the text in those SVGs to outlines using the Cera Pro font from our local font library, so everything renders identically to before.
+
+## License
+
+GNU General Public License v2. The theme code itself is open source. The CSD Darmstadt branding and vielbunt logos belong to vielbunt e.V.
