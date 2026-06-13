@@ -5,7 +5,7 @@ Description: Child theme for csd-darmstadt.de built on top of Twenty Twenty-Five
 Author: vielbunt e.V. – AK Öffentlichkeitsarbeit
 Author URI: https://www.vielbunt.org
 Template: twentytwentyfive
-Version: 2.0.0
+Version: 2.0.1
 Requires at least: 6.7
 Tested up to: 6.8
 Requires PHP: 7.4
@@ -551,6 +551,19 @@ a:focus-visible, button:focus-visible,
 }
 .wp-block-navigation__responsive-container.is-menu-open .vb-mobile-spenden__link:hover {
 	background: #4f37a0;
+}
+
+/* ── Spectra/UAGB icons ──
+   Some Spectra icons (icon list, timeline markers, marketing buttons …)
+   render as inline SVG with a viewBox but no width/height attribute.
+   Without intrinsic dimensions such SVGs blow up to the full column width
+   (e.g. inside post loops where the plugin's own sizing styles don't apply).
+   1em ties the size to the icon wrapper's font-size set by Spectra, i.e. the
+   intended behaviour. Only matches SVGs missing both size attributes, so
+   correctly dimensioned icons are left untouched. */
+[class*="uagb-"] svg:not([width]):not([height]) {
+	width: 1em;
+	height: 1em;
 }
 
 /* respect prefers-reduced-motion */
