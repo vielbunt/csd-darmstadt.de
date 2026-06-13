@@ -107,23 +107,27 @@ function csd_post_image( $post ) {
 
 /* hero block */
 function csd_block_hero( $attributes = array() ) {
-	/* text comes from block attributes if set in the site editor, otherwise uses defaults */
+	/* check persistent settings first so a template reset dosnt wipe out the texts */
+	$saved = get_option( 'csd_hero_settings', array() );
+
 	$kicker  = ( isset( $attributes['kicker'] )  && '' !== $attributes['kicker'] )
 		? $attributes['kicker']
-		: apply_filters( 'csd_hero_kicker', 'CHRISTOPHER STREET DAY DARMSTADT' );
+		: ( ( isset( $saved['kicker'] )    && '' !== $saved['kicker'] )    ? $saved['kicker']    : apply_filters( 'csd_hero_kicker', 'CHRISTOPHER STREET DAY DARMSTADT' ) );
 	$title   = ( isset( $attributes['title'] )   && '' !== $attributes['title'] )
 		? $attributes['title']
-		: apply_filters( 'csd_hero_title', 'Seid dabei.' );
+		: ( ( isset( $saved['title'] )     && '' !== $saved['title'] )     ? $saved['title']     : apply_filters( 'csd_hero_title', 'Seid dabei.' ) );
 	$lead    = ( isset( $attributes['lead'] )    && '' !== $attributes['lead'] )
 		? $attributes['lead']
-		: apply_filters( 'csd_hero_lead', 'Der CSD Darmstadt feiert queeres Leben in Darmstadt und Umgebung. Am 15. August 2026 gehen wir gemeinsam auf die Straße.' );
-	$btn1_label = ( isset( $attributes['btn1Label'] ) && '' !== $attributes['btn1Label'] ) ? $attributes['btn1Label'] : 'Mitmachen';
-	$btn1_url   = ( isset( $attributes['btn1Url'] )   && '' !== $attributes['btn1Url'] )   ? $attributes['btn1Url']   : home_url( '/mitmachen/' );
-	$btn2_label = ( isset( $attributes['btn2Label'] ) && '' !== $attributes['btn2Label'] ) ? $attributes['btn2Label'] : 'Zur Anreise';
-	$btn2_url   = ( isset( $attributes['btn2Url'] )   && '' !== $attributes['btn2Url'] )   ? $attributes['btn2Url']   : home_url( '/anreise/' );
+		: ( ( isset( $saved['lead'] )      && '' !== $saved['lead'] )      ? $saved['lead']      : apply_filters( 'csd_hero_lead', 'Der CSD Darmstadt feiert queeres Leben in Darmstadt und Umgebung. Am 15. August 2026 gehen wir gemeinsam auf die Straße.' ) );
+	$btn1_label = ( isset( $attributes['btn1Label'] ) && '' !== $attributes['btn1Label'] ) ? $attributes['btn1Label'] : ( $saved['btn1Label'] ?? 'Mitmachen'   );
+	$btn1_url   = ( isset( $attributes['btn1Url'] )   && '' !== $attributes['btn1Url'] )   ? $attributes['btn1Url']   : ( $saved['btn1Url']   ?? home_url( '/mitmachen/' ) );
+	$btn2_label = ( isset( $attributes['btn2Label'] ) && '' !== $attributes['btn2Label'] ) ? $attributes['btn2Label'] : ( $saved['btn2Label'] ?? 'Zur Anreise' );
+	$btn2_url   = ( isset( $attributes['btn2Url'] )   && '' !== $attributes['btn2Url'] )   ? $attributes['btn2Url']   : ( $saved['btn2Url']   ?? home_url( '/anreise/' ) );
 
 	if ( ! empty( $attributes['bgUrl'] ) ) {
 		$media = 'url(' . esc_url( $attributes['bgUrl'] ) . ')';
+	} elseif ( ! empty( $saved['bgUrl'] ) ) {
+		$media = 'url(' . esc_url( $saved['bgUrl'] ) . ')';
 	} else {
 		$media = apply_filters( 'csd_hero_media', 'linear-gradient(135deg,#2a1878,#6546b4)' );
 	}
@@ -175,12 +179,15 @@ function csd_default_tiles() {
 }
 
 function csd_block_quicklinks( $attributes = array() ) {
+	/* load persistent settings so tile labels survive a template reset */
+	$saved    = get_option( 'csd_quicklinks_settings', array() );
 	$defaults = csd_default_tiles();
 	$hex      = csd_hex();
 
-	/* merge saved attributes with defaults. color and icon always come from PHP */
-	$attr_tiles = ( isset( $attributes['tiles'] ) && is_array( $attributes['tiles'] ) )
-		? $attributes['tiles'] : array();
+	/* prefer block attributes → saved options → hardcoded defaults. color/icon always from PHP */
+	$has_attr_tiles = isset( $attributes['tiles'] ) && is_array( $attributes['tiles'] ) && count( $attributes['tiles'] ) > 0;
+	$has_saved_tiles = isset( $saved['tiles'] ) && is_array( $saved['tiles'] ) && count( $saved['tiles'] ) > 0;
+	$attr_tiles = $has_attr_tiles ? $attributes['tiles'] : ( $has_saved_tiles ? $saved['tiles'] : array() );
 
 	$tiles = array();
 	foreach ( $defaults as $i => $default ) {
@@ -193,8 +200,13 @@ function csd_block_quicklinks( $attributes = array() ) {
 		);
 	}
 
-	$heading = ( isset( $attributes['heading'] ) && '' !== $attributes['heading'] ) ? $attributes['heading'] : 'Schnellzugriff';
-	$images  = ( isset( $attributes['images'] ) && is_array( $attributes['images'] ) ) ? $attributes['images'] : array();
+	$heading = ( isset( $attributes['heading'] ) && '' !== $attributes['heading'] )
+		? $attributes['heading']
+		: ( ( isset( $saved['heading'] ) && '' !== $saved['heading'] ) ? $saved['heading'] : 'Schnellzugriff' );
+
+	$has_attr_images  = isset( $attributes['images'] ) && is_array( $attributes['images'] ) && count( $attributes['images'] ) > 0;
+	$has_saved_images = isset( $saved['images'] )      && is_array( $saved['images'] )      && count( $saved['images'] )      > 0;
+	$images = $has_attr_images ? $attributes['images'] : ( $has_saved_images ? $saved['images'] : array() );
 
 	$grid = '<div class="vb-grid vb-grid--quick">';
 	foreach ( $tiles as $i => $t ) {
@@ -504,12 +516,56 @@ function csd_block_editor_assets() {
 	wp_enqueue_script(
 		'csd-blocks',
 		get_stylesheet_directory_uri() . '/assets/editor.js',
-		array( 'wp-blocks', 'wp-element', 'wp-server-side-render', 'wp-i18n', 'wp-block-editor', 'wp-components' ),
+		array( 'wp-blocks', 'wp-element', 'wp-server-side-render', 'wp-i18n', 'wp-block-editor', 'wp-components', 'wp-api-fetch' ),
 		wp_get_theme()->get( 'Version' ),
 		true
 	);
 }
 add_action( 'enqueue_block_editor_assets', 'csd_block_editor_assets' );
+
+/* REST endpoint so the editor can persist block settings independent of the template markup.
+   without this, uploading a new theme ZIP resets hero texts and tile labels to empty defaults */
+add_action( 'rest_api_init', 'csd_register_settings_api' );
+function csd_register_settings_api() {
+	register_rest_route( 'csd/v1', '/settings', array(
+		array(
+			'methods'             => 'GET',
+			'callback'            => 'csd_api_get_settings',
+			'permission_callback' => '__return_true',
+		),
+		array(
+			'methods'             => 'POST',
+			'callback'            => 'csd_api_save_settings',
+			'permission_callback' => function () {
+				return current_user_can( 'edit_theme_options' );
+			},
+		),
+	) );
+}
+
+function csd_api_get_settings() {
+	return rest_ensure_response( array(
+		'hero'       => get_option( 'csd_hero_settings',       array() ),
+		'quicklinks' => get_option( 'csd_quicklinks_settings', array() ),
+	) );
+}
+
+function csd_api_save_settings( WP_REST_Request $request ) {
+	$body = $request->get_json_params();
+	if ( isset( $body['hero'] ) && is_array( $body['hero'] ) ) {
+		update_option( 'csd_hero_settings', $body['hero'] );
+	}
+	if ( isset( $body['quicklinks'] ) && is_array( $body['quicklinks'] ) ) {
+		update_option( 'csd_quicklinks_settings', $body['quicklinks'] );
+	}
+	return rest_ensure_response( array( 'ok' => true ) );
+}
+
+/* embedded posts sometimes miss a charset declaration, which causes garbled text */
+add_action( 'embed_head', function () {
+	echo '<meta charset="' . esc_attr( get_bloginfo( 'charset' ) ) . '" />' . "
+";
+}, -100 );
 
 /* WP sometimes outputs \u0026 as literal text in nav blocks, this fixes that */
 function csd_fix_nav_entities( $content, $block ) {

@@ -1,12 +1,17 @@
 /**
  * registers our custom blocks and their sidebar UI for the WordPress editor
  * no build step needed, plain ES5
+ *
+ * settings are saved to wp_options via /csd/v1/settings so they survive
+ * a theme update or template reset (block attributes alone get wiped when
+ * the template file is re-imported)
  */
-( function ( blocks, element, ssr, i18n, blockEditor, components ) {
+( function ( blocks, element, ssr, i18n, blockEditor, components, apiFetch ) {
 	'use strict';
 
 	var el         = element.createElement;
 	var Fragment   = element.Fragment;
+	var useEffect  = element.useEffect;
 	var __         = i18n.__;
 	var InspectorControls = blockEditor.InspectorControls;
 	var MediaUpload       = blockEditor.MediaUpload;
@@ -27,15 +32,54 @@
 		return el( 'hr', { style: { margin: '10px 0', border: 'none', borderTop: '1px solid #e0e0e0' } } );
 	}
 
+	/* debounced save helpers — so we dont fire a request on every keystroke */
+	var heroSaveTimer       = null;
+	var quicklinksSaveTimer = null;
+
+	function saveHero( data ) {
+		clearTimeout( heroSaveTimer );
+		heroSaveTimer = setTimeout( function () {
+			apiFetch( {
+				path:   '/csd/v1/settings',
+				method: 'POST',
+				data:   { hero: data },
+			} ).catch( function () {} );
+		}, 800 );
+	}
+
+	function saveQuicklinks( data ) {
+		clearTimeout( quicklinksSaveTimer );
+		quicklinksSaveTimer = setTimeout( function () {
+			apiFetch( {
+				path:   '/csd/v1/settings',
+				method: 'POST',
+				data:   { quicklinks: data },
+			} ).catch( function () {} );
+		}, 800 );
+	}
+
 	/* hero block editor UI */
 	function heroEdit( props ) {
 		var a = props.attributes;
+
+		/* on first mount: if all text attributes are empty, load from persistent settings */
+		useEffect( function () {
+			if ( ! a.kicker && ! a.title && ! a.lead ) {
+				apiFetch( { path: '/csd/v1/settings' } ).then( function ( settings ) {
+					if ( settings && settings.hero && Object.keys( settings.hero ).length ) {
+						props.setAttributes( settings.hero );
+					}
+				} ).catch( function () {} );
+			}
+		}, [] );
 
 		function set( key ) {
 			return function ( v ) {
 				var u = {};
 				u[ key ] = v;
 				props.setAttributes( u );
+				/* also persist to wp_options so a template reset wont lose this */
+				saveHero( Object.assign( {}, a, u ) );
 			};
 		}
 
@@ -76,7 +120,11 @@
 				el( MediaUpload, {
 					allowedTypes: [ 'image' ],
 					value: a.bgId,
-					onSelect: function ( m ) { props.setAttributes( { bgUrl: m.url, bgId: m.id } ); },
+					onSelect: function ( m ) {
+						var u = { bgUrl: m.url, bgId: m.id };
+						props.setAttributes( u );
+						saveHero( Object.assign( {}, a, u ) );
+					},
 					render: function ( o ) {
 						return el( Button, { variant: 'secondary', onClick: o.open },
 							a.bgUrl ? __( 'Bild ersetzen', 'csd-darmstadt' ) : __( 'Hintergrundbild wählen', 'csd-darmstadt' )
@@ -87,7 +135,11 @@
 			a.bgUrl ? el( Button, {
 				variant: 'link', isDestructive: true,
 				style: { marginTop: '10px', display: 'block' },
-				onClick: function () { props.setAttributes( { bgUrl: '', bgId: 0 } ); }
+				onClick: function () {
+					var u = { bgUrl: '', bgId: 0 };
+					props.setAttributes( u );
+					saveHero( Object.assign( {}, a, u ) );
+				}
 			}, __( 'Bild entfernen', 'csd-darmstadt' ) ) : null
 		);
 
@@ -115,6 +167,23 @@
 		var savedTiles = props.attributes.tiles;
 		var imgs       = props.attributes.images || {};
 
+		/* on first mount: if tiles are empty, load from persistent settings */
+		useEffect( function () {
+			var hasTiles = savedTiles && savedTiles.length === DEFAULT_TILES.length;
+			if ( ! hasTiles ) {
+				apiFetch( { path: '/csd/v1/settings' } ).then( function ( settings ) {
+					if ( settings && settings.quicklinks ) {
+						var ql     = settings.quicklinks;
+						var update = {};
+						if ( ql.tiles   && ql.tiles.length )                  { update.tiles   = ql.tiles;   }
+						if ( ql.heading && ql.heading !== 'Schnellzugriff' )  { update.heading = ql.heading; }
+						if ( ql.images  && Object.keys( ql.images ).length )  { update.images  = ql.images;  }
+						if ( Object.keys( update ).length ) { props.setAttributes( update ); }
+					}
+				} ).catch( function () {} );
+			}
+		}, [] );
+
 		/* use saved attributes if all 8 tiles are saved, otherwise fall back to defaults */
 		var tiles = ( savedTiles && savedTiles.length === DEFAULT_TILES.length )
 			? savedTiles
@@ -127,6 +196,8 @@
 			} );
 			next[ i ][ key ] = value;
 			props.setAttributes( { tiles: next } );
+			/* also persist so tile labels survive a template reset */
+			saveQuicklinks( Object.assign( {}, props.attributes, { tiles: next } ) );
 		}
 
 		/* heading panel */
@@ -135,7 +206,10 @@
 			el( TextControl, {
 				label: __( 'Überschrift', 'csd-darmstadt' ),
 				value: props.attributes.heading || '',
-				onChange: function ( v ) { props.setAttributes( { heading: v } ); }
+				onChange: function ( v ) {
+					props.setAttributes( { heading: v } );
+					saveQuicklinks( Object.assign( {}, props.attributes, { heading: v } ) );
+				}
 			} )
 		);
 
@@ -169,6 +243,7 @@
 							var n = Object.assign( {}, imgs );
 							n[ i ] = { url: m.url, id: m.id };
 							props.setAttributes( { images: n } );
+							saveQuicklinks( Object.assign( {}, props.attributes, { images: n } ) );
 						},
 						render: function ( o ) {
 							return el( Button, { variant: 'secondary', onClick: o.open },
@@ -184,6 +259,7 @@
 						var n = Object.assign( {}, imgs );
 						delete n[ i ];
 						props.setAttributes( { images: n } );
+						saveQuicklinks( Object.assign( {}, props.attributes, { images: n } ) );
 					}
 				}, __( 'Bild entfernen', 'csd-darmstadt' ) ) : null
 			);
@@ -248,4 +324,4 @@
 	registerPlain( 'csd/footerlinks', __( 'CSD: Footer-Links',       'csd-darmstadt' ), 'editor-ul'    );
 
 } )( window.wp.blocks, window.wp.element, window.wp.serverSideRender,
-     window.wp.i18n, window.wp.blockEditor, window.wp.components );
+     window.wp.i18n, window.wp.blockEditor, window.wp.components, window.wp.apiFetch );
