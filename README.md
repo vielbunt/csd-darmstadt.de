@@ -28,6 +28,19 @@ We built these as server-side rendered blocks, so they show up correctly in the 
 
 Just open Design > Editor, click on the block you want to edit and look at the right sidebar. The CSD Hero block has panels for "Texte", "Buttons" and "Hintergrundbild". The Schnellzugriff block has one collapsable panel per tile where you can change the title and URL. Colors and icons are fixed in the PHP and woud need a code change.
 
+## Spendenkampagne (Donorbox goal meter + button)
+
+The campaign band under the hero is driven by the Customizer, not the block editor. Open **Design → Customizer → "Spendenkampagne"**. There you can:
+
+- toggle the whole band on/off,
+- set a heading and an optional intro text,
+- paste the **goal meter** embed code (Donorbox: campaign → "Ziel-Messer" → Code einbetten),
+- paste the **donate button** embed code (Donorbox: "Spenden-Button" → Code einbetten).
+
+It ships **enabled** and pre-filled with the `csd-darmstadt-2026` campaign codes, so it works out of the box. Leave a field empty to hide just that part; untick the toggle (or empty both code fields) once the campaign is over and the band disappears with no layout gap. The embed fields accept the raw Donorbox HTML including its `<script>` — only users allowed to post unfiltered HTML (admins) keep it verbatim, everyone else gets `wp_kses_post`.
+
+**How it's placed:** the band is *not* a block you drop into a template. It's appended right after the front-page hero via a `render_block` filter (`csd_render_campaign_after_hero`). This is deliberate — once `front-page` has been edited in the Site Editor it lives in the database and edits to `templates/front-page.html` are ignored, so anchoring on the hero block is the only reliable placement.
+
 ## The yearly flag graphic
 
 We keep the annual CSD graphic at `assets/flag-pic-2026.svg`. All the text in that file has been converted to paths already so it renders corectly without needing any fonts installed. When we make a new version for 2027, just replace that file and the hero will pick it up automaticaly.

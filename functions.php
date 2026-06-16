@@ -462,6 +462,166 @@ function csd_block_post_hero( $attributes = array() ) {
 	return ob_get_clean();
 }
 
+/* ──────────────────────────────────────────────────────────────
+   Spendenkampagne: Zielmesser + Spenden-Button (Donorbox)
+   Gesteuert über den Customizer (Design → Anpassen → "Spendenkampagne").
+   Auf csd-darmstadt.de ist die Kampagne csd-darmstadt-2026 per Default
+   aktiv und mit den von Donorbox vorgegebenen Einbettungscodes vorbelegt.
+   Der Block rendert nur etwas, wenn die Kampagne aktiviert ist UND ein
+   Einbettungscode hinterlegt wurde – so bleibt die Seite sauber, sobald
+   die Kampagne vorbei ist und deaktiviert wird.
+   ────────────────────────────────────────────────────────────── */
+
+/* Von Donorbox vorgegebene Einbettungscodes für die CSD-2026-Kampagne.
+   Dienen als Default; im Customizer jederzeit überschreibbar.
+
+   Zielmesser: Donorbox' Code-Generator liefert für den „Ziel-Messer" leider
+   den FORMULAR-Code (type="donation_form") – der rendert das ganze Formular,
+   nicht den Balken. Der reine Fortschrittsbalken ist aber ein simpler iframe
+   auf donorbox.org/embed/<kampagne> mit ?only_donation_meter=true (so rendert
+   ihn auch das Donorbox-Widget intern). donation_meter_color setzt die
+   Balkenfarbe (%23 = #), hier das CSD-Lila #6546b4. */
+define( 'CSD_CAMPAIGN_METER_DEFAULT', '<iframe src="https://donorbox.org/embed/csd-darmstadt-2026?only_donation_meter=true&amp;donation_meter_color=%236546b4" name="donorbox-goal-meter" seamless="seamless" scrolling="no" frameborder="0" loading="lazy" width="100%" height="100" style="max-width:480px;min-width:250px;min-height:90px;border:0;background:transparent;"></iframe>' );
+define( 'CSD_CAMPAIGN_BUTTON_DEFAULT', '<a class="dbox-donation-page-button" href="https://donorbox.org/csd-darmstadt-2026?" style="background: rgb(101, 70, 180); color: rgb(255, 255, 255); text-decoration: none; font-family: Verdana, sans-serif; display: block; gap: 8px; width: fit-content; font-size: 16px; border-radius: 5px; line-height: 24px; padding: 8px 24px; margin-right: auto;"><img role="presentation" src="https://donorbox.org/images/white_logo.svg"> Spenden</a>' );
+
+function csd_block_campaign( $attributes = array() ) {
+	if ( ! get_theme_mod( 'csd_campaign_enable', true ) ) {
+		return '';
+	}
+
+	$meter  = get_theme_mod( 'csd_campaign_meter',  CSD_CAMPAIGN_METER_DEFAULT );
+	$button = get_theme_mod( 'csd_campaign_button', CSD_CAMPAIGN_BUTTON_DEFAULT );
+
+	// ohne Inhalt nichts ausgeben
+	if ( '' === trim( (string) $meter ) && '' === trim( (string) $button ) ) {
+		return '';
+	}
+
+	$heading = get_theme_mod( 'csd_campaign_heading', 'Unser Spendenziel für den CSD 2026' );
+	$text    = get_theme_mod( 'csd_campaign_text', '' );
+
+	ob_start();
+	?>
+	<section class="vb-campaign">
+		<div class="vb-campaign__inner">
+			<?php if ( '' !== trim( (string) $heading ) ) : ?>
+				<h2 class="vb-campaign__title"><?php echo esc_html( $heading ); ?></h2>
+			<?php endif; ?>
+			<?php if ( '' !== trim( (string) $text ) ) : ?>
+				<p class="vb-campaign__text"><?php echo esc_html( $text ); ?></p>
+			<?php endif; ?>
+			<?php if ( '' !== trim( (string) $meter ) ) : ?>
+				<div class="vb-campaign__meter"><?php echo $meter; // phpcs:ignore WordPress.Security.EscapeOutput -- Donorbox-Einbettung, beim Speichern per Capability gefiltert ?></div>
+			<?php endif; ?>
+			<?php if ( '' !== trim( (string) $button ) ) : ?>
+				<div class="vb-campaign__cta"><?php echo $button; // phpcs:ignore WordPress.Security.EscapeOutput -- s. o. ?></div>
+			<?php endif; ?>
+		</div>
+	</section>
+	<?php
+	return ob_get_clean();
+}
+
+/* Die Kampagne hängen wir per render_block-Filter direkt an den Hero-Block an.
+   Das ist zuverlässiger als ein Block-Kommentar im front-page-Template: Sobald
+   das Template einmal im Site-Editor angepasst wurde, liegt es in der Datenbank
+   und Änderungen an der Theme-Datei werden ignoriert. Über den Hero-Block als
+   Anker erscheint die Kampagne dagegen immer an der richtigen Stelle. */
+function csd_render_campaign_after_hero( $block_content, $block ) {
+	if ( ! empty( $block['blockName'] ) && 'csd/hero' === $block['blockName'] && is_front_page() ) {
+		$block_content .= csd_block_campaign();
+	}
+	return $block_content;
+}
+add_filter( 'render_block', 'csd_render_campaign_after_hero', 10, 2 );
+
+/* Customizer: Sektion "Spendenkampagne" */
+function csd_campaign_sanitize_bool( $value ) {
+	return (bool) $value;
+}
+
+/* Roh-HTML-Einbettung (Donorbox liefert <script> + Custom-Elements).
+   Gleiches Muster wie das Custom-HTML-Widget im Core: Wer Roh-HTML setzen
+   darf (Admins, die ohnehin den Customizer bedienen), behält den Code 1:1,
+   alle anderen bekommen wp_kses_post. */
+function csd_campaign_sanitize_embed( $value ) {
+	if ( current_user_can( 'unfiltered_html' ) ) {
+		return $value;
+	}
+	return wp_kses_post( $value );
+}
+
+function csd_customize_campaign( $wp_customize ) {
+	$wp_customize->add_section( 'csd_campaign', array(
+		'title'       => __( 'Spendenkampagne', 'csd-darmstadt' ),
+		'priority'    => 130,
+		'description' => __( 'Zielmesser (Fortschrittsbalken) und Spenden-Button von Donorbox auf der Startseite. Die Einbettungscodes findest du in Donorbox unter Kampagne → „Ziel-Messer" bzw. „Spenden-Button".', 'csd-darmstadt' ),
+	) );
+
+	$wp_customize->add_setting( 'csd_campaign_enable', array(
+		'default'           => true,
+		'type'              => 'theme_mod',
+		'sanitize_callback' => 'csd_campaign_sanitize_bool',
+		'transport'         => 'refresh',
+	) );
+	$wp_customize->add_control( 'csd_campaign_enable', array(
+		'section' => 'csd_campaign',
+		'type'    => 'checkbox',
+		'label'   => __( 'Kampagne auf der Startseite anzeigen', 'csd-darmstadt' ),
+	) );
+
+	$wp_customize->add_setting( 'csd_campaign_heading', array(
+		'default'           => 'Unser Spendenziel für den CSD 2026',
+		'type'              => 'theme_mod',
+		'sanitize_callback' => 'sanitize_text_field',
+		'transport'         => 'refresh',
+	) );
+	$wp_customize->add_control( 'csd_campaign_heading', array(
+		'section' => 'csd_campaign',
+		'type'    => 'text',
+		'label'   => __( 'Überschrift', 'csd-darmstadt' ),
+	) );
+
+	$wp_customize->add_setting( 'csd_campaign_text', array(
+		'default'           => '',
+		'type'              => 'theme_mod',
+		'sanitize_callback' => 'sanitize_textarea_field',
+		'transport'         => 'refresh',
+	) );
+	$wp_customize->add_control( 'csd_campaign_text', array(
+		'section' => 'csd_campaign',
+		'type'    => 'textarea',
+		'label'   => __( 'Einleitungstext (optional)', 'csd-darmstadt' ),
+	) );
+
+	$wp_customize->add_setting( 'csd_campaign_meter', array(
+		'default'           => CSD_CAMPAIGN_METER_DEFAULT,
+		'type'              => 'theme_mod',
+		'sanitize_callback' => 'csd_campaign_sanitize_embed',
+		'transport'         => 'refresh',
+	) );
+	$wp_customize->add_control( 'csd_campaign_meter', array(
+		'section'     => 'csd_campaign',
+		'type'        => 'textarea',
+		'label'       => __( 'Zielmesser – Einbettungscode', 'csd-darmstadt' ),
+		'description' => __( 'Kompletten Code aus Donorbox („Ziel-Messer" → Code einbetten) hier einfügen.', 'csd-darmstadt' ),
+	) );
+
+	$wp_customize->add_setting( 'csd_campaign_button', array(
+		'default'           => CSD_CAMPAIGN_BUTTON_DEFAULT,
+		'type'              => 'theme_mod',
+		'sanitize_callback' => 'csd_campaign_sanitize_embed',
+		'transport'         => 'refresh',
+	) );
+	$wp_customize->add_control( 'csd_campaign_button', array(
+		'section'     => 'csd_campaign',
+		'type'        => 'textarea',
+		'label'       => __( 'Spenden-Button – Einbettungscode', 'csd-darmstadt' ),
+		'description' => __( 'Kompletten Code aus Donorbox („Spenden-Button" → Code einbetten) hier einfügen. Leer lassen, um keinen Button anzuzeigen.', 'csd-darmstadt' ),
+	) );
+}
+add_action( 'customize_register', 'csd_customize_campaign' );
+
 /* register all our custom blocks with WordPress */
 function csd_register_blocks() {
 	$common = array( 'api_version' => 3 );
@@ -508,6 +668,8 @@ function csd_register_blocks() {
 		'render_callback' => 'csd_block_post_hero',
 		'uses_context'    => array( 'postId', 'postType' ),
 	) ) );
+	// Hinweis: Die Spendenkampagne ist KEIN platzierbarer Block – sie wird per
+	// render_block-Filter automatisch hinter den Hero gehängt (s. o.).
 }
 add_action( 'init', 'csd_register_blocks' );
 
