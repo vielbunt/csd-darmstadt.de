@@ -83,6 +83,11 @@ If the artwork itself changes one day, export it with the date as outlines (like
 - **One-time steps:** `inc/once.php` holds things that should happen exactly once on the server after an update (e.g. switching off the FancyBox plugin, Autoptimize not touching Google Fonts). Results are listed under Design > Theme-Updates.
 - **Spenden buttons:** while the campaign is off, buttons that point to a CSD Donorbox campaign go to the general donation link from the Customizer (Spendenkampagne > "Spenden-Link ohne Kampagne", default vielbunt.org/spenden/).
 
+## Search engines
+
+- `inc/seo.php`: category, tag, author and date archives, search results and `/page/2/` get `noindex` and are left out of the sitemap. Every page and post has a switch **"Nicht in Suchmaschinen anzeigen"** (sidebar, panel "Suchmaschinen") for old forms, past campaigns and so on, without deleting them. Pages have an excerpt field now, that text becomes the description Google shows.
+- `inc/schema.php`: structured data on the front page (WebSite, Organization) plus an **Event** for the next CSD. Its date is the "Datum in der Grafik" field, the place is set at the top of the file (Karolinenplatz). After the day the event disappears until a new date is entered.
+
 ## Colors
 
 The main brand color is CSD purple `#6546B4`. In the theme it's registered under two slugs, `purple` and `pink`, both pointing to the same value. The `pink` slug exists becuase a lot of the base CSS uses it by name and we didnt want to rename everything.

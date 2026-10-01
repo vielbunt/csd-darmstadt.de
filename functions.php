@@ -15,6 +15,11 @@ require_once get_stylesheet_directory() . '/inc/frontpage.php';
 require_once get_stylesheet_directory() . '/inc/flag-date.php';
 require_once get_stylesheet_directory() . '/inc/meta.php';
 require_once get_stylesheet_directory() . '/inc/icons.php';
+require_once get_stylesheet_directory() . '/inc/seo.php';
+require_once get_stylesheet_directory() . '/inc/schema.php';
+
+/* search engines: archives out, per-page switch and excerpts for pages, see inc/seo.php */
+vbseo_setup( array( 'toggle' => true, 'page_excerpt' => true ) );
 require_once get_stylesheet_directory() . '/inc/deploy.php';
 require_once get_stylesheet_directory() . '/inc/once.php';
 
@@ -28,9 +33,76 @@ new Vielbunt_Theme_Deploy(
 			'2026-10-fancybox'     => array( 'FancyBox-Plugin abschalten (Theme hat jetzt eine eigene Lightbox)', 'vielbunt_once_disable_fancybox' ),
 			'2026-10-autoptimize'  => array( 'Autoptimize: Google Fonts entfernen, kein Preconnect zu Google', 'vielbunt_once_autoptimize_no_gfonts' ),
 			'2026-10-kampagne-aus' => array( 'Spendenkampagne 2026 ausschalten', 'csd_once_campaign_off' ),
+			'2026-10-suche'        => array( 'Suche aufräumen: Altlasten auf noindex, Titel und Menü ohne Jahreszahl, Kategorie umbenannt', 'csd_once_search_cleanup' ),
 		),
 	)
 );
+
+/* one-time cleanup so Google gets sensible sub pages. everything is
+   reversible: noindex via the switch "Nicht in Suchmaschinen anzeigen" in the
+   page sidebar, the old titles and menu labels are in the result text under
+   Design > Theme-Updates. straight via $wpdb for titles and menu so no content
+   filter touches the page content (this can run on a normal page view) */
+function csd_once_search_cleanup() {
+	global $wpdb;
+	$log = array();
+
+	// Altlasten und alte Motto-/Aktionswochen-Seiten. Die Übersicht "Mottos vergangener Jahre" bleibt drin
+	$hide = array(
+		'qr', 'dein-weg-auf-den-festplatz/kontaktdatenformular', 'mit-vielbunt-zum-csd-hanau',
+		'anmeldung-eines-infostands-auf-dem-riegerplatz',
+		'csd-2011-wir-lieben-vielfalt', 'csd-2012-natuerlich-anders', 'csd-2013-mit-vollem-recht-queer',
+		'csd-2014-ich-hab-nichts-gegen-die-aber', 'csd-2015-wir-koennen-auch-anders', 'csd-2016-liebe-sex-und-widerstand',
+		'motto-2017', 'motto-2018', 'motto-2019', 'motto-2020-zusammenhalten', 'csd-motto-2021',
+		'csd-2022-ich-hab-immer-noch-nix-gegen-die-aber-fuck-you', 'motto-2023-vielfalt-verpflichtet',
+		'motto-2024', 'motto-2025', 'csd-pride-week-2024', 'csd-pride-week-2025',
+	);
+	$hidden = array();
+	foreach ( $hide as $path ) {
+		$page = get_page_by_path( $path );
+		if ( $page ) {
+			update_post_meta( $page->ID, '_vb_noindex', '1' );
+			$hidden[] = $path;
+		}
+	}
+	$log[] = count( $hidden ) . ' Seiten auf noindex (' . implode( ', ', $hidden ) . ')';
+
+	// Seitentitel ohne Jahr
+	$page = get_page_by_path( 'demo-parade' );
+	if ( $page && 'Demo 2026' === $page->post_title ) {
+		$wpdb->update( $wpdb->posts, array( 'post_title' => 'Demo & Route' ), array( 'ID' => $page->ID ) );
+		clean_post_cache( $page->ID );
+		$log[] = 'Seite /demo-parade/: "Demo 2026" -> "Demo & Route"';
+	}
+
+	// Menü: Jahreszahlen raus
+	$labels = array( 'Der CSD 2026' => 'Der CSD', 'Demo 2026' => 'Demo & Route' );
+	$navs   = get_posts( array( 'post_type' => 'wp_navigation', 'post_status' => 'publish', 'posts_per_page' => -1 ) );
+	foreach ( $navs as $nav ) {
+		$content = $nav->post_content;
+		foreach ( $labels as $old => $new ) {
+			$content = str_replace(
+				array( '"label":"' . $old . '"', '"label":"' . str_replace( '&', '\u0026', $old ) . '"' ),
+				'"label":"' . str_replace( '&', '\u0026', $new ) . '"',
+				$content
+			);
+		}
+		if ( $content !== $nav->post_content ) {
+			$wpdb->update( $wpdb->posts, array( 'post_content' => $content ), array( 'ID' => $nav->ID ) );
+			clean_post_cache( $nav->ID );
+			$log[] = 'Menü "' . $nav->post_title . '": ' . implode( ', ', array_map( function ( $o, $n ) { return '"' . $o . '" -> "' . $n . '"'; }, array_keys( $labels ), $labels ) );
+		}
+	}
+
+	// Kategorie heißt nicht mehr wie die Seite "Bühnenprogramm"
+	$cat = get_term_by( 'slug', 'programm', 'category' );
+	if ( $cat && 'Bühnenprogramm' === $cat->name ) {
+		wp_update_term( $cat->term_id, 'category', array( 'name' => 'Programm-News' ) );
+		$log[] = 'Kategorie "Bühnenprogramm" -> "Programm-News"';
+	}
+
+	return implode( ' | ', $log );
+}
 
 /* no campaign for 2027 yet, so the 2026 one goes off once. switch it back on
    in the Customizer (Spendenkampagne) as soon as there is a new one */
