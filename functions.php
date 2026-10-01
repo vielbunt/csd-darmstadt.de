@@ -14,7 +14,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 require_once get_stylesheet_directory() . '/inc/frontpage.php';
 require_once get_stylesheet_directory() . '/inc/flag-date.php';
 require_once get_stylesheet_directory() . '/inc/meta.php';
+require_once get_stylesheet_directory() . '/inc/icons.php';
 require_once get_stylesheet_directory() . '/inc/deploy.php';
+require_once get_stylesheet_directory() . '/inc/once.php';
 
 /* updates straight from GitHub, see inc/deploy.php and Design > Theme-Updates */
 new Vielbunt_Theme_Deploy(
@@ -22,8 +24,20 @@ new Vielbunt_Theme_Deploy(
 		'repo'      => 'vielbunt/csd-darmstadt.de',
 		'namespace' => 'csd/v1',
 		'prefix'    => 'csd',
+		'once'      => array(
+			'2026-10-fancybox'     => array( 'FancyBox-Plugin abschalten (Theme hat jetzt eine eigene Lightbox)', 'vielbunt_once_disable_fancybox' ),
+			'2026-10-autoptimize'  => array( 'Autoptimize: Google Fonts entfernen, kein Preconnect zu Google', 'vielbunt_once_autoptimize_no_gfonts' ),
+			'2026-10-kampagne-aus' => array( 'Spendenkampagne 2026 ausschalten', 'csd_once_campaign_off' ),
+		),
 	)
 );
+
+/* no campaign for 2027 yet, so the 2026 one goes off once. switch it back on
+   in the Customizer (Spendenkampagne) as soon as there is a new one */
+function csd_once_campaign_off() {
+	set_theme_mod( 'csd_campaign_enable', false );
+	return 'Kampagne im Customizer ausgeschaltet';
+}
 
 /* load styles and the nav script */
 function csd_enqueue_styles() {
@@ -45,6 +59,14 @@ function csd_enqueue_styles() {
 		array(),
 		wp_get_theme()->get( 'Version' ),
 		true
+	);
+	/* replaces the old FancyBox plugin, no jQuery needed */
+	wp_enqueue_script(
+		'csd-lightbox',
+		get_stylesheet_directory_uri() . '/assets/lightbox.js',
+		array(),
+		wp_get_theme()->get( 'Version' ),
+		array( 'in_footer' => true, 'strategy' => 'defer' )
 	);
 }
 add_action( 'wp_enqueue_scripts', 'csd_enqueue_styles' );
@@ -488,7 +510,7 @@ define( 'CSD_CAMPAIGN_METER_DEFAULT', '<iframe src="https://donorbox.org/embed/c
 define( 'CSD_CAMPAIGN_BUTTON_DEFAULT', '<a class="dbox-donation-page-button" href="https://donorbox.org/csd-darmstadt-2026?" style="background: rgb(101, 70, 180); color: rgb(255, 255, 255); text-decoration: none; font-family: Verdana, sans-serif; display: block; gap: 8px; width: fit-content; font-size: 16px; border-radius: 5px; line-height: 24px; padding: 8px 24px; margin-right: auto;"><img role="presentation" src="https://donorbox.org/images/white_logo.svg"> Spenden</a>' );
 
 function csd_block_campaign( $attributes = array() ) {
-	if ( ! get_theme_mod( 'csd_campaign_enable', true ) ) {
+	if ( ! get_theme_mod( 'csd_campaign_enable', false ) ) {
 		return '';
 	}
 
@@ -538,6 +560,25 @@ function csd_render_campaign_after_hero( $block_content, $block ) {
 }
 add_filter( 'render_block', 'csd_render_campaign_after_hero', 10, 2 );
 
+/* Spenden-Buttons ohne laufende Kampagne: Links auf eine CSD-Donorbox-Kampagne
+   (z. B. csd-darmstadt-2026) zeigen dann auf die allgemeine Spendenseite.
+   Läuft per render_block, damit es auch für einen im Site-Editor angepassten
+   Header gilt. Ist die Kampagne an, bleibt alles wie eingetragen. */
+define( 'CSD_DONATE_URL_DEFAULT', 'https://www.vielbunt.org/spenden/' );
+
+function csd_donate_url() {
+	$url = get_theme_mod( 'csd_donate_url', CSD_DONATE_URL_DEFAULT );
+	return $url ? $url : CSD_DONATE_URL_DEFAULT;
+}
+
+function csd_donate_links_without_campaign( $content, $block ) {
+	if ( empty( $block['blockName'] ) || 'core/button' !== $block['blockName'] || get_theme_mod( 'csd_campaign_enable', false ) ) {
+		return $content;
+	}
+	return preg_replace( '#href="https?://(?:www\.)?donorbox\.org/csd-darmstadt-[^"]*"#i', 'href="' . esc_url( csd_donate_url() ) . '"', $content );
+}
+add_filter( 'render_block', 'csd_donate_links_without_campaign', 10, 2 );
+
 /* Customizer: Sektion "Spendenkampagne" */
 function csd_campaign_sanitize_bool( $value ) {
 	return (bool) $value;
@@ -562,7 +603,7 @@ function csd_customize_campaign( $wp_customize ) {
 	) );
 
 	$wp_customize->add_setting( 'csd_campaign_enable', array(
-		'default'           => true,
+		'default'           => false,
 		'type'              => 'theme_mod',
 		'sanitize_callback' => 'csd_campaign_sanitize_bool',
 		'transport'         => 'refresh',
@@ -571,6 +612,19 @@ function csd_customize_campaign( $wp_customize ) {
 		'section' => 'csd_campaign',
 		'type'    => 'checkbox',
 		'label'   => __( 'Kampagne auf der Startseite anzeigen', 'csd-darmstadt' ),
+	) );
+
+	$wp_customize->add_setting( 'csd_donate_url', array(
+		'default'           => CSD_DONATE_URL_DEFAULT,
+		'type'              => 'theme_mod',
+		'sanitize_callback' => 'esc_url_raw',
+		'transport'         => 'refresh',
+	) );
+	$wp_customize->add_control( 'csd_donate_url', array(
+		'section'     => 'csd_campaign',
+		'type'        => 'url',
+		'label'       => __( 'Spenden-Link ohne Kampagne', 'csd-darmstadt' ),
+		'description' => __( 'Solange die Kampagne aus ist, führen alle Spenden-Buttons (Header, Mobilmenü), die auf eine Donorbox-Kampagne zeigen, hierhin.', 'csd-darmstadt' ),
 	) );
 
 	$wp_customize->add_setting( 'csd_campaign_heading', array(

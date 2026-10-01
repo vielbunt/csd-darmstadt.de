@@ -66,7 +66,7 @@ The campaign band under the hero is driven by the Customizer, not the block edit
 - paste the **goal meter** embed code (Donorbox: campaign → "Ziel-Messer" → Code einbetten),
 - paste the **donate button** embed code (Donorbox: "Spenden-Button" → Code einbetten).
 
-It ships **enabled** and pre-filled with the `csd-darmstadt-2026` campaign codes, so it works out of the box. Leave a field empty to hide just that part; untick the toggle (or empty both code fields) once the campaign is over and the band disappears with no layout gap. The embed fields accept the raw Donorbox HTML including its `<script>` — only users allowed to post unfiltered HTML (admins) keep it verbatim, everyone else gets `wp_kses_post`.
+It ships **disabled** (no campaign for 2027 yet) but pre-filled with the `csd-darmstadt-2026` campaign codes, replace them for a new campaign. Leave a field empty to hide just that part; untick the toggle (or empty both code fields) once the campaign is over and the band disappears with no layout gap. The embed fields accept the raw Donorbox HTML including its `<script>` — only users allowed to post unfiltered HTML (admins) keep it verbatim, everyone else gets `wp_kses_post`.
 
 **How it's placed:** the band is *not* a block you drop into a template. It's appended right after the front-page hero via a `render_block` filter (`csd_render_campaign_after_hero`). This is deliberate — once `front-page` has been edited in the Site Editor it lives in the database and edits to `templates/front-page.html` are ignored, so anchoring on the hero block is the only reliable placement.
 
@@ -75,6 +75,13 @@ It ships **enabled** and pre-filled with the `csd-darmstadt-2026` campaign codes
 The graphic next to the hero text lives in `assets/flag.svg`. It has no fixed date anymore: the date comes from the hero block, panel **Grafik**, field "Datum in der Grafik" (format `21.08.2027`). The theme sets it in Cera Pro Bold with exactly the size, tracking and centring of the original artwork, so it looks hand-made in the design tool. No font file is loaded, the theme only ships the outlines of the digits 0 to 9 and the dot (`inc/flag-glyphs.php`). Leave the field empty and the graphic has no date. On phones the graphic is hidden on purpose.
 
 If the artwork itself changes one day, export it with the date as outlines (like the 2026 version) and run `python3 tools/flag-glyphs.py <Cera-Pro-Bold.otf> <new.svg>`, the script swaps the date for the placeholder and rebuilds the digit table.
+
+## Lightbox, favicons, one-time steps
+
+- **Lightbox:** `assets/lightbox.js` (no jQuery) opens every link to an image file, with arrows, keys and swipe through the gallery or post. Image blocks without a link use WordPress' own lightbox (enabled in `theme.json`). The old FancyBox plugin is no longer needed.
+- **Icons:** favicon and app icons live in `assets/icons` and replace the site icon from the Customizer.
+- **One-time steps:** `inc/once.php` holds things that should happen exactly once on the server after an update (e.g. switching off the FancyBox plugin, Autoptimize not touching Google Fonts). Results are listed under Design > Theme-Updates.
+- **Spenden buttons:** while the campaign is off, buttons that point to a CSD Donorbox campaign go to the general donation link from the Customizer (Spendenkampagne > "Spenden-Link ohne Kampagne", default vielbunt.org/spenden/).
 
 ## Colors
 

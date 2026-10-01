@@ -79,13 +79,15 @@
 			} );
 		}
 
-		/* add the spenden button to the bottom of the overlay */
+		/* add the spenden button to the bottom of the overlay. it takes the link
+		   of the spenden button in the header, so there is only one place to change it */
 		var content = nav.querySelector( '.wp-block-navigation__responsive-container-content' );
 		if ( content && ! nav.querySelector( '.vb-mobile-spenden' ) ) {
 			var wrapper = document.createElement( 'div' );
 			wrapper.className = 'vb-mobile-spenden';
 			var link = document.createElement( 'a' );
-			link.href = 'https://donorbox.org/csd-darmstadt-2026';
+			var headerBtn = document.querySelector( '.vb-header__nav .wp-block-button__link' );
+			link.href = headerBtn ? headerBtn.href : 'https://www.vielbunt.org/spenden/';
 			link.className = 'vb-mobile-spenden__link';
 			link.textContent = 'Spenden';
 			wrapper.appendChild( link );

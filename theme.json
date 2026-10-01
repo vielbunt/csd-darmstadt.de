@@ -10,6 +10,14 @@
 		}
 	],
 	"settings": {
+		"blocks": {
+			"core/image": {
+				"lightbox": {
+					"enabled": true,
+					"allowEditing": true
+				}
+			}
+		},
 		"appearanceTools": true,
 		"color": {
 			"custom": false,
