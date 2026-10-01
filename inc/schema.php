@@ -74,6 +74,14 @@ function csd_schema_graph() {
 			'eventStatus'         => 'https://schema.org/EventScheduled',
 			'eventAttendanceMode' => 'https://schema.org/OfflineEventAttendanceMode',
 			'isAccessibleForFree' => true,
+			// free entry, Google likes to see that as an offer too
+			'offers'              => array(
+				'@type'         => 'Offer',
+				'price'         => '0',
+				'priceCurrency' => 'EUR',
+				'availability'  => 'https://schema.org/InStock',
+				'url'           => $home,
+			),
 			'url'                 => $home,
 			'image'               => array( $image ? $image : $logo ),
 			'location'            => array(
