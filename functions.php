@@ -33,6 +33,7 @@ new Vielbunt_Theme_Deploy(
 			'2026-10-fancybox'     => array( 'FancyBox-Plugin abschalten (Theme hat jetzt eine eigene Lightbox)', 'vielbunt_once_disable_fancybox' ),
 			'2026-10-autoptimize'  => array( 'Autoptimize: Google Fonts entfernen, kein Preconnect zu Google', 'vielbunt_once_autoptimize_no_gfonts' ),
 			'2026-10-kampagne-aus' => array( 'Spendenkampagne 2026 ausschalten', 'csd_once_campaign_off' ),
+			'2026-10-auszuege'     => array( 'Auszüge (Google-Beschreibungen) für die wichtigsten Seiten', 'csd_once_page_excerpts' ),
 			'2026-10-suche'        => array( 'Suche aufräumen: Altlasten auf noindex, Titel und Menü ohne Jahreszahl, Kategorie umbenannt', 'csd_once_search_cleanup' ),
 		),
 	)
@@ -102,6 +103,52 @@ function csd_once_search_cleanup() {
 	}
 
 	return implode( ' | ', $log );
+}
+
+/* short descriptions for the important pages, Google shows them below the
+   link instead of the first words of the page (which was e.g. CSS code on
+   "Ansprechpersonen"). only set where no excerpt exists yet, so nothing
+   written by hand gets overwritten */
+function csd_once_page_excerpts() {
+	global $wpdb;
+	$texts = array(
+		'demo-parade'                     => 'Die Demo ist das Herzstück des CSD Darmstadt: Start, Aufstellung und Route der Demonstration durch die Innenstadt, dazu die Anmeldung für Fußgruppen.',
+		'anreise'                         => 'Lageplan des Festplatzes und Anreise mit Straßenbahn, Bus und Bahn zum CSD Darmstadt auf dem Karolinenplatz.',
+		'buehnenprogramm-2'               => 'Das Programm auf der CSD-Bühne am Karolinenplatz: Livemusik, Podiumsdiskussionen, Grußworte und Drag Show, mit allen Uhrzeiten auf einen Blick.',
+		'mitmachen'                       => 'Der CSD Darmstadt wird komplett ehrenamtlich organisiert. So kannst du mithelfen: in der AG CSD von vielbunt oder als Helfer*in am CSD-Tag.',
+		'kontakt'                         => 'Kontakt zum CSD Darmstadt: Ansprechpersonen für Demo, Bühnenprogramm, Infostände und Marketing sowie alle Anmeldeformulare.',
+		'infostaende'                     => 'Vereine, Gruppen und Parteien informieren beim CSD Darmstadt an ihren Ständen über queere Themen. Hier findest du alle Infostände.',
+		'motto-2026'                      => '„Zeig dich. Für uns alle.“ Das Motto des CSD Darmstadt 2026 ist politisches Statement und solidarischer Aufruf zugleich.',
+		'csd-pride-week-2026'             => 'Das Programm der CSD Pride Week 2026 in Darmstadt: Empfänge, Lesungen, Kino, Gottesdienst und vieles mehr in der Woche vor dem CSD.',
+		'warum-csd'                       => 'Warum gibt es den Christopher Street Day? Vom Aufstand im Stonewall Inn 1969 bis zum CSD in Darmstadt heute.',
+		'veranstalter'                    => 'Der CSD Darmstadt wird von vielbunt e.V. organisiert, dem Verein der queeren Community in Darmstadt. Wer wir sind und wofür wir uns einsetzen.',
+		'ansprechpersonen'                => 'Deine Ansprechpersonen beim CSD Darmstadt, von Bühnenprogramm über Demo bis Marketing, mit E-Mail-Adresse für jeden Bereich.',
+		'schirmherrschaft'                => 'Darmstadts Oberbürgermeister Hanno Benz ist Schirmherr des CSD Darmstadt. Hier steht sein Grußwort zum Christopher Street Day.',
+		'spenden'                         => 'Unterstütze den CSD Darmstadt mit einer Spende. Jeder Euro hilft, Bühne, Technik, Sicherheit und Barrierefreiheit zu finanzieren.',
+		'jetzt-spenden'                   => 'Unterstütze den CSD Darmstadt mit einer Spende. Jeder Euro hilft, Bühne, Technik, Sicherheit und Barrierefreiheit zu finanzieren.',
+		'sponsoren'                       => 'Werde Sponsor*in des CSD Darmstadt und hilf mit, Genehmigungen, Technik, Bühne und Werbung für den Christopher Street Day zu finanzieren.',
+		'partner'                         => 'Kooperationspartner*innen und Unterstützer*innen für den CSD Darmstadt: Finanzierung, Werbung, Vernetzung und private Patenschaften.',
+		'videos'                          => 'Trailer und Teaser des CSD Darmstadt aus den letzten Jahren, alle Videos auf einen Blick.',
+		'after-show-party-centralstation' => 'Die offizielle After-Show-Party des CSD Darmstadt in der Centralstation: alle Infos zu DJs und Tickets.',
+		'anmeldungen'                     => 'Online-Anmeldung für den CSD Darmstadt: Fußgruppen für die Demo, Infostände, Aktionswoche und Helfer*innen.',
+		'mottos-des-csd-darmstadt'        => 'Alle Mottos des CSD Darmstadt seit 2011, von „Wir l(i)eben Vielfalt!“ bis heute, dazu die Trailer der vergangenen Jahre.',
+	);
+	$set  = array();
+	$kept = array();
+	foreach ( $texts as $path => $text ) {
+		$page = get_page_by_path( $path );
+		if ( ! $page ) {
+			continue;
+		}
+		if ( '' !== trim( $page->post_excerpt ) ) {
+			$kept[] = $path;
+			continue;
+		}
+		$wpdb->update( $wpdb->posts, array( 'post_excerpt' => $text ), array( 'ID' => $page->ID ) );
+		clean_post_cache( $page->ID );
+		$set[] = $path;
+	}
+	return count( $set ) . ' Auszüge gesetzt' . ( $kept ? ', ' . count( $kept ) . ' vorhandene behalten (' . implode( ', ', $kept ) . ')' : '' );
 }
 
 /* no campaign for 2027 yet, so the 2026 one goes off once. switch it back on
