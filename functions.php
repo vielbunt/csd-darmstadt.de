@@ -11,6 +11,18 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+require_once get_stylesheet_directory() . '/inc/frontpage.php';
+require_once get_stylesheet_directory() . '/inc/deploy.php';
+
+/* updates straight from GitHub, see inc/deploy.php and Design > Theme-Updates */
+new Vielbunt_Theme_Deploy(
+	array(
+		'repo'      => 'vielbunt/csd-darmstadt.de',
+		'namespace' => 'csd/v1',
+		'prefix'    => 'csd',
+	)
+);
+
 /* load styles and the nav script */
 function csd_enqueue_styles() {
 	wp_enqueue_style(
@@ -105,29 +117,41 @@ function csd_post_image( $post ) {
 
 /* the actual block render callbacks */
 
-/* hero block */
+/* hero defaults, also used as placeholders in the editor sidebar */
+function csd_hero_defaults() {
+	return array(
+		'kicker'    => apply_filters( 'csd_hero_kicker', 'CHRISTOPHER STREET DAY DARMSTADT' ),
+		'title'     => apply_filters( 'csd_hero_title', 'Seid dabei.' ),
+		'lead'      => apply_filters( 'csd_hero_lead', 'Der CSD Darmstadt feiert queeres Leben in Darmstadt und Umgebung. Am 15. August 2026 gehen wir gemeinsam auf die Straße.' ),
+		'btn1Label' => 'Mitmachen',
+		'btn1Url'   => home_url( '/mitmachen/' ),
+		'btn2Label' => 'Zur Anreise',
+		'btn2Url'   => home_url( '/anreise/' ),
+	);
+}
+
+/* hero block. content comes from the csd_frontpage option (see inc/frontpage.php),
+   empty fields fall back to the defaults above */
 function csd_block_hero( $attributes = array() ) {
-	/* check persistent settings first so a template reset dosnt wipe out the texts */
-	$saved = get_option( 'csd_hero_settings', array() );
+	$data     = csd_frontpage_for_render( $attributes );
+	$hero     = $data['hero'];
+	$defaults = csd_hero_defaults();
+	foreach ( $defaults as $key => $default ) {
+		if ( '' === $hero[ $key ] ) {
+			$hero[ $key ] = $default;
+		}
+	}
+	$kicker     = $hero['kicker'];
+	$title      = $hero['title'];
+	$lead       = $hero['lead'];
+	$btn1_label = $hero['btn1Label'];
+	$btn1_url   = $hero['btn1Url'];
+	$btn2_label = $hero['btn2Label'];
+	$btn2_url   = $hero['btn2Url'];
 
-	$kicker  = ( isset( $attributes['kicker'] )  && '' !== $attributes['kicker'] )
-		? $attributes['kicker']
-		: ( ( isset( $saved['kicker'] )    && '' !== $saved['kicker'] )    ? $saved['kicker']    : apply_filters( 'csd_hero_kicker', 'CHRISTOPHER STREET DAY DARMSTADT' ) );
-	$title   = ( isset( $attributes['title'] )   && '' !== $attributes['title'] )
-		? $attributes['title']
-		: ( ( isset( $saved['title'] )     && '' !== $saved['title'] )     ? $saved['title']     : apply_filters( 'csd_hero_title', 'Seid dabei.' ) );
-	$lead    = ( isset( $attributes['lead'] )    && '' !== $attributes['lead'] )
-		? $attributes['lead']
-		: ( ( isset( $saved['lead'] )      && '' !== $saved['lead'] )      ? $saved['lead']      : apply_filters( 'csd_hero_lead', 'Der CSD Darmstadt feiert queeres Leben in Darmstadt und Umgebung. Am 15. August 2026 gehen wir gemeinsam auf die Straße.' ) );
-	$btn1_label = ( isset( $attributes['btn1Label'] ) && '' !== $attributes['btn1Label'] ) ? $attributes['btn1Label'] : ( $saved['btn1Label'] ?? 'Mitmachen'   );
-	$btn1_url   = ( isset( $attributes['btn1Url'] )   && '' !== $attributes['btn1Url'] )   ? $attributes['btn1Url']   : ( $saved['btn1Url']   ?? home_url( '/mitmachen/' ) );
-	$btn2_label = ( isset( $attributes['btn2Label'] ) && '' !== $attributes['btn2Label'] ) ? $attributes['btn2Label'] : ( $saved['btn2Label'] ?? 'Zur Anreise' );
-	$btn2_url   = ( isset( $attributes['btn2Url'] )   && '' !== $attributes['btn2Url'] )   ? $attributes['btn2Url']   : ( $saved['btn2Url']   ?? home_url( '/anreise/' ) );
-
-	if ( ! empty( $attributes['bgUrl'] ) ) {
-		$media = 'url(' . esc_url( $attributes['bgUrl'] ) . ')';
-	} elseif ( ! empty( $saved['bgUrl'] ) ) {
-		$media = 'url(' . esc_url( $saved['bgUrl'] ) . ')';
+	$bg = csd_frontpage_image( $hero['bgId'], $hero['bgUrl'], 'full' );
+	if ( '' !== $bg ) {
+		$media = 'url(' . esc_url( $bg ) . ')';
 	} else {
 		$media = apply_filters( 'csd_hero_media', 'linear-gradient(135deg,#2a1878,#6546b4)' );
 	}
@@ -179,34 +203,26 @@ function csd_default_tiles() {
 }
 
 function csd_block_quicklinks( $attributes = array() ) {
-	/* load persistent settings so tile labels survive a template reset */
-	$saved    = get_option( 'csd_quicklinks_settings', array() );
+	$data     = csd_frontpage_for_render( $attributes );
+	$saved    = $data['quicklinks'];
 	$defaults = csd_default_tiles();
 	$hex      = csd_hex();
 
-	/* prefer block attributes → saved options → hardcoded defaults. color/icon always from PHP */
-	$has_attr_tiles = isset( $attributes['tiles'] ) && is_array( $attributes['tiles'] ) && count( $attributes['tiles'] ) > 0;
-	$has_saved_tiles = isset( $saved['tiles'] ) && is_array( $saved['tiles'] ) && count( $saved['tiles'] ) > 0;
-	$attr_tiles = $has_attr_tiles ? $attributes['tiles'] : ( $has_saved_tiles ? $saved['tiles'] : array() );
-
-	$tiles = array();
+	/* label/url/image from the option, empty fields fall back to the defaults. color/icon always from PHP */
+	$tiles  = array();
+	$images = array();
 	foreach ( $defaults as $i => $default ) {
-		$override = isset( $attr_tiles[ $i ] ) ? (array) $attr_tiles[ $i ] : array();
+		$override = $saved['tiles'][ $i ];
 		$tiles[]  = array(
-			'label' => ( isset( $override['label'] ) && '' !== $override['label'] ) ? $override['label'] : $default['label'],
-			'url'   => ( isset( $override['url'] )   && '' !== $override['url'] )   ? $override['url']   : $default['url'],
+			'label' => '' !== $override['label'] ? $override['label'] : $default['label'],
+			'url'   => '' !== $override['url'] ? $override['url'] : $default['url'],
 			'color' => $default['color'],
 			'icon'  => $default['icon'],
 		);
+		$images[ $i ] = array( 'url' => csd_frontpage_image( $override['imgId'], $override['imgUrl'] ) );
 	}
 
-	$heading = ( isset( $attributes['heading'] ) && '' !== $attributes['heading'] )
-		? $attributes['heading']
-		: ( ( isset( $saved['heading'] ) && '' !== $saved['heading'] ) ? $saved['heading'] : 'Schnellzugriff' );
-
-	$has_attr_images  = isset( $attributes['images'] ) && is_array( $attributes['images'] ) && count( $attributes['images'] ) > 0;
-	$has_saved_images = isset( $saved['images'] )      && is_array( $saved['images'] )      && count( $saved['images'] )      > 0;
-	$images = $has_attr_images ? $attributes['images'] : ( $has_saved_images ? $saved['images'] : array() );
+	$heading = '' !== $saved['heading'] ? $saved['heading'] : 'Schnellzugriff';
 
 	$grid = '<div class="vb-grid vb-grid--quick">';
 	foreach ( $tiles as $i => $t ) {
@@ -626,27 +642,16 @@ add_action( 'customize_register', 'csd_customize_campaign' );
 function csd_register_blocks() {
 	$common = array( 'api_version' => 3 );
 
+	/* hero + quicklinks keep their content in the csd_frontpage option, not in
+	   block attributes. "preview" is only sent by the editor sidebar and never
+	   saved into the template */
+	$preview = array( 'preview' => array( 'type' => 'object' ) );
 	register_block_type( 'csd/hero', array_merge( $common, array(
-		'attributes'      => array(
-			'bgUrl'      => array( 'type' => 'string', 'default' => '' ),
-			'bgId'       => array( 'type' => 'number', 'default' => 0 ),
-			'kicker'     => array( 'type' => 'string', 'default' => '' ),
-			'title'      => array( 'type' => 'string', 'default' => '' ),
-			'lead'       => array( 'type' => 'string', 'default' => '' ),
-			'btn1Label'  => array( 'type' => 'string', 'default' => '' ),
-			'btn1Url'    => array( 'type' => 'string', 'default' => '' ),
-			'btn2Label'  => array( 'type' => 'string', 'default' => '' ),
-			'btn2Url'    => array( 'type' => 'string', 'default' => '' ),
-		),
+		'attributes'      => $preview,
 		'render_callback' => 'csd_block_hero',
 	) ) );
 	register_block_type( 'csd/quicklinks', array_merge( $common, array(
-		'attributes'      => array(
-			'heading' => array( 'type' => 'string', 'default' => 'Schnellzugriff' ),
-			'tiles'   => array( 'type' => 'array',  'default' => array(),
-				'items' => array( 'type' => 'object' ) ),
-			'images'  => array( 'type' => 'object', 'default' => array() ),
-		),
+		'attributes'      => $preview,
 		'render_callback' => 'csd_block_quicklinks',
 	) ) );
 	register_block_type( 'csd/events', array_merge( $common, array(
@@ -678,50 +683,17 @@ function csd_block_editor_assets() {
 	wp_enqueue_script(
 		'csd-blocks',
 		get_stylesheet_directory_uri() . '/assets/editor.js',
-		array( 'wp-blocks', 'wp-element', 'wp-server-side-render', 'wp-i18n', 'wp-block-editor', 'wp-components', 'wp-api-fetch' ),
+		array( 'wp-blocks', 'wp-element', 'wp-server-side-render', 'wp-i18n', 'wp-block-editor', 'wp-components', 'wp-core-data' ),
 		wp_get_theme()->get( 'Version' ),
 		true
 	);
+	wp_add_inline_script(
+		'csd-blocks',
+		'window.csdFrontpage = ' . wp_json_encode( csd_frontpage_editor_data() ) . ';',
+		'before'
+	);
 }
 add_action( 'enqueue_block_editor_assets', 'csd_block_editor_assets' );
-
-/* REST endpoint so the editor can persist block settings independent of the template markup.
-   without this, uploading a new theme ZIP resets hero texts and tile labels to empty defaults */
-add_action( 'rest_api_init', 'csd_register_settings_api' );
-function csd_register_settings_api() {
-	register_rest_route( 'csd/v1', '/settings', array(
-		array(
-			'methods'             => 'GET',
-			'callback'            => 'csd_api_get_settings',
-			'permission_callback' => '__return_true',
-		),
-		array(
-			'methods'             => 'POST',
-			'callback'            => 'csd_api_save_settings',
-			'permission_callback' => function () {
-				return current_user_can( 'edit_theme_options' );
-			},
-		),
-	) );
-}
-
-function csd_api_get_settings() {
-	return rest_ensure_response( array(
-		'hero'       => get_option( 'csd_hero_settings',       array() ),
-		'quicklinks' => get_option( 'csd_quicklinks_settings', array() ),
-	) );
-}
-
-function csd_api_save_settings( WP_REST_Request $request ) {
-	$body = $request->get_json_params();
-	if ( isset( $body['hero'] ) && is_array( $body['hero'] ) ) {
-		update_option( 'csd_hero_settings', $body['hero'] );
-	}
-	if ( isset( $body['quicklinks'] ) && is_array( $body['quicklinks'] ) ) {
-		update_option( 'csd_quicklinks_settings', $body['quicklinks'] );
-	}
-	return rest_ensure_response( array( 'ok' => true ) );
-}
 
 /* embedded posts sometimes miss a charset declaration, which causes garbled text */
 add_action( 'embed_head', function () {

@@ -2,16 +2,18 @@
  * registers our custom blocks and their sidebar UI for the WordPress editor
  * no build step needed, plain ES5
  *
- * settings are saved to wp_options via /csd/v1/settings so they survive
- * a theme update or template reset (block attributes alone get wiped when
- * the template file is re-imported)
+ * hero + Schnellzugriff do NOT keep their content in block attributes anymore.
+ * everything lives in the option "csd_frontpage" (see inc/frontpage.php) and is
+ * edited through the core "site" entity. that means:
+ *  - changes are saved with the normal "Speichern" button, together with the template
+ *  - nothing is lost after a theme update, a template reset or a re-upload
+ *  - images are stored as a plain list, so WordPress cant mangle them anymore
  */
-( function ( blocks, element, ssr, i18n, blockEditor, components, apiFetch ) {
+( function ( blocks, element, ssr, i18n, blockEditor, components, coreData ) {
 	'use strict';
 
 	var el         = element.createElement;
 	var Fragment   = element.Fragment;
-	var useEffect  = element.useEffect;
 	var __         = i18n.__;
 	var InspectorControls = blockEditor.InspectorControls;
 	var MediaUpload       = blockEditor.MediaUpload;
@@ -20,6 +22,13 @@
 	var Button          = components.Button;
 	var TextControl     = components.TextControl;
 	var TextareaControl = components.TextareaControl;
+	var Notice          = components.Notice;
+	var Spinner         = components.Spinner;
+
+	var CONFIG   = window.csdFrontpage || { option: 'csd_frontpage', defaults: { hero: {}, heading: 'Schnellzugriff', tiles: [] } };
+	var OPTION   = CONFIG.option;
+	var DEFAULTS = CONFIG.defaults;
+	var TILES    = 8;
 
 	/* helpers */
 
@@ -32,265 +41,217 @@
 		return el( 'hr', { style: { margin: '10px 0', border: 'none', borderTop: '1px solid #e0e0e0' } } );
 	}
 
-	/* debounced save helpers — so we dont fire a request on every keystroke */
-	var heroSaveTimer       = null;
-	var quicklinksSaveTimer = null;
+	/* always returns the full shape, even if the option is still empty */
+	function normalize( raw ) {
+		var d    = JSON.parse( JSON.stringify( raw || {} ) );
+		var hero = d.hero || {};
+		[ 'kicker', 'title', 'lead', 'btn1Label', 'btn1Url', 'btn2Label', 'btn2Url', 'bgUrl' ].forEach( function ( k ) {
+			if ( typeof hero[ k ] !== 'string' ) { hero[ k ] = ''; }
+		} );
+		hero.bgId = parseInt( hero.bgId, 10 ) || 0;
 
-	function saveHero( data ) {
-		clearTimeout( heroSaveTimer );
-		heroSaveTimer = setTimeout( function () {
-			apiFetch( {
-				path:   '/csd/v1/settings',
-				method: 'POST',
-				data:   { hero: data },
-			} ).catch( function () {} );
-		}, 800 );
+		var ql    = d.quicklinks || {};
+		var tiles = Array.isArray( ql.tiles ) ? ql.tiles : [];
+		var list  = [];
+		for ( var i = 0; i < TILES; i++ ) {
+			var t = tiles[ i ] || {};
+			list.push( {
+				label:  typeof t.label === 'string' ? t.label : '',
+				url:    typeof t.url === 'string' ? t.url : '',
+				imgId:  parseInt( t.imgId, 10 ) || 0,
+				imgUrl: typeof t.imgUrl === 'string' ? t.imgUrl : ''
+			} );
+		}
+		return {
+			hero: hero,
+			quicklinks: { heading: typeof ql.heading === 'string' ? ql.heading : '', tiles: list }
+		};
 	}
 
-	function saveQuicklinks( data ) {
-		clearTimeout( quicklinksSaveTimer );
-		quicklinksSaveTimer = setTimeout( function () {
-			apiFetch( {
-				path:   '/csd/v1/settings',
-				method: 'POST',
-				data:   { quicklinks: data },
-			} ).catch( function () {} );
-		}, 800 );
+	/* reads the option from the site entity and returns [ data, update ].
+	   update( fn ) gets a fresh copy, fn changes it, then it goes back into the
+	   entity. the editor marks it as unsaved and "Speichern" writes it */
+	function useFrontpage() {
+		var prop    = coreData.useEntityProp( 'root', 'site', OPTION );
+		var raw     = prop[ 0 ];
+		var setRaw  = prop[ 1 ];
+		var data    = raw === undefined ? null : normalize( raw );
+		function update( fn ) {
+			var next = normalize( raw );
+			fn( next );
+			setRaw( next );
+		}
+		return [ data, update ];
+	}
+
+	function loadingOrError() {
+		return el( 'div', { style: { padding: '0 16px 16px' } }, el( Spinner ) );
+	}
+
+	function saveHint() {
+		return el( Notice, { status: 'info', isDismissible: false },
+			__( 'Änderungen erscheinen sofort in der Vorschau und werden mit „Speichern" oben rechts übernommen. Sie bleiben auch bei Theme-Updates erhalten.', 'csd-darmstadt' )
+		);
+	}
+
+	/* image picker with a small thumbnail so you can see what is selected */
+	function imagePicker( id, url, onPick, onRemove, labelPick ) {
+		return el( 'div', {},
+			url ? el( 'img', { src: url, alt: '', style: { display: 'block', width: '100%', maxHeight: 120, objectFit: 'cover', marginBottom: 8, borderRadius: 2 } } ) : null,
+			el( 'div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+				el( MediaUploadCheck, {},
+					el( MediaUpload, {
+						allowedTypes: [ 'image' ],
+						value: id || 0,
+						onSelect: function ( m ) { onPick( m ); },
+						render: function ( o ) {
+							return el( Button, { variant: 'secondary', onClick: o.open },
+								url ? __( 'Bild ersetzen', 'csd-darmstadt' ) : labelPick );
+						}
+					} )
+				),
+				url ? el( Button, { variant: 'link', isDestructive: true, onClick: onRemove },
+					__( 'Bild entfernen', 'csd-darmstadt' ) ) : null
+			)
+		);
 	}
 
 	/* hero block editor UI */
-	function heroEdit( props ) {
-		var a = props.attributes;
+	function heroEdit() {
+		var fp     = useFrontpage();
+		var data   = fp[ 0 ];
+		var update = fp[ 1 ];
+		var def    = DEFAULTS.hero || {};
 
-		/* on first mount: if all text attributes are empty, load from persistent settings */
-		useEffect( function () {
-			if ( ! a.kicker && ! a.title && ! a.lead ) {
-				apiFetch( { path: '/csd/v1/settings' } ).then( function ( settings ) {
-					if ( settings && settings.hero && Object.keys( settings.hero ).length ) {
-						props.setAttributes( settings.hero );
-					}
-				} ).catch( function () {} );
-			}
-		}, [] );
+		if ( ! data ) {
+			return el( Fragment, {},
+				el( InspectorControls, {}, loadingOrError() ),
+				el( ssr, { block: 'csd/hero', attributes: {}, httpMethod: 'POST' } )
+			);
+		}
+		var h = data.hero;
 
-		function set( key ) {
-			return function ( v ) {
-				var u = {};
-				u[ key ] = v;
-				props.setAttributes( u );
-				/* also persist to wp_options so a template reset wont lose this */
-				saveHero( Object.assign( {}, a, u ) );
-			};
+		function field( Control, key, label, extra ) {
+			return el( Control, Object.assign( {
+				label: label,
+				value: h[ key ],
+				placeholder: def[ key ] || '',
+				onChange: function ( v ) { update( function ( d ) { d.hero[ key ] = v; } ); }
+			}, extra || {} ) );
 		}
 
 		var textPanel = el( PanelBody,
 			{ title: __( 'Texte', 'csd-darmstadt' ), initialOpen: true },
-			el( TextControl, {
-				label: __( 'Kicker (Kleintext oben)', 'csd-darmstadt' ),
-				value: a.kicker || '',
-				onChange: set( 'kicker' )
-			} ),
-			el( TextControl, {
-				label: __( 'Überschrift', 'csd-darmstadt' ),
-				value: a.title || '',
-				onChange: set( 'title' )
-			} ),
-			el( TextareaControl, {
-				label: __( 'Lead-Text', 'csd-darmstadt' ),
-				value: a.lead || '',
-				rows: 3,
-				onChange: set( 'lead' )
-			} )
+			saveHint(),
+			field( TextControl, 'kicker', __( 'Kicker (Kleintext oben)', 'csd-darmstadt' ) ),
+			field( TextControl, 'title', __( 'Überschrift', 'csd-darmstadt' ) ),
+			field( TextareaControl, 'lead', __( 'Lead-Text', 'csd-darmstadt' ), { rows: 3 } ),
+			el( 'p', { style: { color: '#757575', fontSize: 12 } }, __( 'Leere Felder zeigen den grauen Standardtext.', 'csd-darmstadt' ) )
 		);
 
 		var btnPanel = el( PanelBody,
 			{ title: __( 'Buttons', 'csd-darmstadt' ), initialOpen: false },
 			el( 'p', { style: { fontWeight: 600, margin: '0 0 4px' } }, __( 'Button 1 (ausgefüllt)', 'csd-darmstadt' ) ),
-			el( TextControl, { label: __( 'Beschriftung', 'csd-darmstadt' ), value: a.btn1Label || '', onChange: set( 'btn1Label' ) } ),
-			el( TextControl, { label: __( 'URL', 'csd-darmstadt' ),          value: a.btn1Url   || '', onChange: set( 'btn1Url'   ) } ),
+			field( TextControl, 'btn1Label', __( 'Beschriftung', 'csd-darmstadt' ) ),
+			field( TextControl, 'btn1Url', __( 'URL', 'csd-darmstadt' ) ),
 			sep(),
 			el( 'p', { style: { fontWeight: 600, margin: '0 0 4px' } }, __( 'Button 2 (Rahmen)', 'csd-darmstadt' ) ),
-			el( TextControl, { label: __( 'Beschriftung', 'csd-darmstadt' ), value: a.btn2Label || '', onChange: set( 'btn2Label' ) } ),
-			el( TextControl, { label: __( 'URL', 'csd-darmstadt' ),          value: a.btn2Url   || '', onChange: set( 'btn2Url'   ) } )
+			field( TextControl, 'btn2Label', __( 'Beschriftung', 'csd-darmstadt' ) ),
+			field( TextControl, 'btn2Url', __( 'URL', 'csd-darmstadt' ) )
 		);
 
 		var bgPanel = el( PanelBody,
 			{ title: __( 'Hintergrundbild', 'csd-darmstadt' ), initialOpen: false },
-			el( MediaUploadCheck, {},
-				el( MediaUpload, {
-					allowedTypes: [ 'image' ],
-					value: a.bgId,
-					onSelect: function ( m ) {
-						var u = { bgUrl: m.url, bgId: m.id };
-						props.setAttributes( u );
-						saveHero( Object.assign( {}, a, u ) );
-					},
-					render: function ( o ) {
-						return el( Button, { variant: 'secondary', onClick: o.open },
-							a.bgUrl ? __( 'Bild ersetzen', 'csd-darmstadt' ) : __( 'Hintergrundbild wählen', 'csd-darmstadt' )
-						);
-					}
-				} )
-			),
-			a.bgUrl ? el( Button, {
-				variant: 'link', isDestructive: true,
-				style: { marginTop: '10px', display: 'block' },
-				onClick: function () {
-					var u = { bgUrl: '', bgId: 0 };
-					props.setAttributes( u );
-					saveHero( Object.assign( {}, a, u ) );
-				}
-			}, __( 'Bild entfernen', 'csd-darmstadt' ) ) : null
+			imagePicker( h.bgId, h.bgUrl,
+				function ( m ) { update( function ( d ) { d.hero.bgId = m.id; d.hero.bgUrl = m.url; } ); },
+				function () { update( function ( d ) { d.hero.bgId = 0; d.hero.bgUrl = ''; } ); },
+				__( 'Hintergrundbild wählen', 'csd-darmstadt' )
+			)
 		);
 
 		return el( Fragment, {},
 			elMany( InspectorControls, {}, [ textPanel, btnPanel, bgPanel ] ),
-			el( ssr, { block: 'csd/hero', attributes: props.attributes } )
+			el( ssr, { block: 'csd/hero', attributes: { preview: data }, httpMethod: 'POST' } )
 		);
 	}
 
 	/* quick access tiles editor UI */
+	function quicklinksEdit() {
+		var fp     = useFrontpage();
+		var data   = fp[ 0 ];
+		var update = fp[ 1 ];
 
-	/* must match csd_default_tiles() in functions.php */
-	var DEFAULT_TILES = [
-		{ label: 'After Show Party', url: 'https://www.csd-darmstadt.de/after-show-party-centralstation/' },
-		{ label: 'Motto 2025',       url: 'https://www.csd-darmstadt.de/motto-2025/' },
-		{ label: 'Pride Week 2025',  url: 'https://www.csd-darmstadt.de/csd-pride-week-2025/' },
-		{ label: 'Kontakt',          url: 'https://www.csd-darmstadt.de/kontakt/' },
-		{ label: 'Fotos CSD 2025',   url: 'https://www.csd-darmstadt.de/2025/08/fotos-vom-csd-darmstadt-2025-in-arbeit/' },
-		{ label: 'Videos',           url: 'https://www.csd-darmstadt.de/videos/' },
-		{ label: 'Anreise',          url: 'https://www.csd-darmstadt.de/anreise/' },
-		{ label: 'Mitmachen!',       url: 'https://www.csd-darmstadt.de/mitmachen/' }
-	];
+		if ( ! data ) {
+			return el( Fragment, {},
+				el( InspectorControls, {}, loadingOrError() ),
+				el( ssr, { block: 'csd/quicklinks', attributes: {}, httpMethod: 'POST' } )
+			);
+		}
+		var ql = data.quicklinks;
 
-	function quicklinksEdit( props ) {
-		var savedTiles = props.attributes.tiles;
-		var imgs       = props.attributes.images || {};
-
-		/* on first mount: if tiles are empty, load from persistent settings */
-		useEffect( function () {
-			var hasTiles = savedTiles && savedTiles.length === DEFAULT_TILES.length;
-			if ( ! hasTiles ) {
-				apiFetch( { path: '/csd/v1/settings' } ).then( function ( settings ) {
-					if ( settings && settings.quicklinks ) {
-						var ql     = settings.quicklinks;
-						var update = {};
-						if ( ql.tiles   && ql.tiles.length )                  { update.tiles   = ql.tiles;   }
-						if ( ql.heading && ql.heading !== 'Schnellzugriff' )  { update.heading = ql.heading; }
-						if ( ql.images  && Object.keys( ql.images ).length )  { update.images  = ql.images;  }
-						if ( Object.keys( update ).length ) { props.setAttributes( update ); }
-					}
-				} ).catch( function () {} );
-			}
-		}, [] );
-
-		/* use saved attributes if all 8 tiles are saved, otherwise fall back to defaults */
-		var tiles = ( savedTiles && savedTiles.length === DEFAULT_TILES.length )
-			? savedTiles
-			: DEFAULT_TILES;
-
-		function updateTile( i, key, value ) {
-			var next = DEFAULT_TILES.map( function ( def, idx ) {
-				var cur = ( savedTiles && savedTiles[ idx ] ) ? savedTiles[ idx ] : def;
-				return Object.assign( {}, cur );
-			} );
-			next[ i ][ key ] = value;
-			props.setAttributes( { tiles: next } );
-			/* also persist so tile labels survive a template reset */
-			saveQuicklinks( Object.assign( {}, props.attributes, { tiles: next } ) );
+		function setTile( i, patch ) {
+			update( function ( d ) { Object.assign( d.quicklinks.tiles[ i ], patch ); } );
 		}
 
-		/* heading panel */
 		var headingPanel = el( PanelBody,
 			{ title: __( 'Überschrift', 'csd-darmstadt' ), initialOpen: false },
 			el( TextControl, {
 				label: __( 'Überschrift', 'csd-darmstadt' ),
-				value: props.attributes.heading || '',
-				onChange: function ( v ) {
-					props.setAttributes( { heading: v } );
-					saveQuicklinks( Object.assign( {}, props.attributes, { heading: v } ) );
-				}
+				value: ql.heading,
+				placeholder: DEFAULTS.heading || 'Schnellzugriff',
+				onChange: function ( v ) { update( function ( d ) { d.quicklinks.heading = v; } ); }
 			} )
 		);
 
 		/* one collapsible panel per tile */
-		var tilePanels = tiles.map( function ( tile, i ) {
-			var imgEntry = imgs[ i ] || null;
+		var tilePanels = ql.tiles.map( function ( tile, i ) {
+			var def = DEFAULTS.tiles[ i ] || { label: '', url: '' };
 			return el( PanelBody, {
 				key: 'tile-' + i,
-				title: ( i + 1 ) + '. ' + ( tile.label || '—' ),
+				title: ( i + 1 ) + '. ' + ( tile.label || def.label || __( 'Kachel', 'csd-darmstadt' ) ) + ( tile.imgUrl ? ' (Bild)' : '' ),
 				initialOpen: false
 			},
 				el( TextControl, {
 					label: __( 'Titel', 'csd-darmstadt' ),
-					value: tile.label || '',
-					onChange: function ( v ) { updateTile( i, 'label', v ); }
+					value: tile.label,
+					placeholder: def.label,
+					onChange: function ( v ) { setTile( i, { label: v } ); }
 				} ),
 				el( TextControl, {
 					label: __( 'URL', 'csd-darmstadt' ),
-					value: tile.url || '',
-					onChange: function ( v ) { updateTile( i, 'url', v ); }
+					value: tile.url,
+					placeholder: def.url,
+					onChange: function ( v ) { setTile( i, { url: v } ); }
 				} ),
 				sep(),
 				el( 'p', { style: { fontWeight: 600, fontSize: '11px', margin: '0 0 6px' } },
 					__( 'Hintergrundbild', 'csd-darmstadt' )
 				),
-				el( MediaUploadCheck, {},
-					el( MediaUpload, {
-						allowedTypes: [ 'image' ],
-						value: imgEntry ? imgEntry.id : 0,
-						onSelect: function ( m ) {
-							var n = Object.assign( {}, imgs );
-							n[ i ] = { url: m.url, id: m.id };
-							props.setAttributes( { images: n } );
-							saveQuicklinks( Object.assign( {}, props.attributes, { images: n } ) );
-						},
-						render: function ( o ) {
-							return el( Button, { variant: 'secondary', onClick: o.open },
-								imgEntry ? __( 'Bild ersetzen', 'csd-darmstadt' ) : __( 'Bild wählen', 'csd-darmstadt' )
-							);
-						}
-					} )
-				),
-				imgEntry ? el( Button, {
-					variant: 'link', isDestructive: true,
-					style: { marginLeft: '8px' },
-					onClick: function () {
-						var n = Object.assign( {}, imgs );
-						delete n[ i ];
-						props.setAttributes( { images: n } );
-						saveQuicklinks( Object.assign( {}, props.attributes, { images: n } ) );
-					}
-				}, __( 'Bild entfernen', 'csd-darmstadt' ) ) : null
+				imagePicker( tile.imgId, tile.imgUrl,
+					function ( m ) { setTile( i, { imgId: m.id, imgUrl: m.url } ); },
+					function () { setTile( i, { imgId: 0, imgUrl: '' } ); },
+					__( 'Bild wählen', 'csd-darmstadt' )
+				)
 			);
 		} );
 
 		/* spread all panels as indiviual arguments, passing an array directly dosnt work in older React */
-		var allPanels = [ headingPanel ].concat( tilePanels );
+		var allPanels = [ el( 'div', { key: 'hint', style: { padding: '0 16px' } }, saveHint() ), headingPanel ].concat( tilePanels );
 
 		return el( Fragment, {},
 			elMany( InspectorControls, {}, allPanels ),
-			el( ssr, { block: 'csd/quicklinks', attributes: props.attributes } )
+			el( ssr, { block: 'csd/quicklinks', attributes: { preview: data }, httpMethod: 'POST' } )
 		);
 	}
 
-	/* block registrations */
+	/* block registrations. the old content attributes are gone on purpose:
+	   whatever is still in an old template gets dropped on the next save */
 	blocks.registerBlockType( 'csd/hero', {
 		apiVersion: 3,
 		title: __( 'CSD: Hero', 'csd-darmstadt' ),
 		category: 'widgets', icon: 'cover-image',
 		supports: { html: false, reusable: false },
-		attributes: {
-			bgUrl:     { type: 'string', default: '' },
-			bgId:      { type: 'number', default: 0  },
-			kicker:    { type: 'string', default: '' },
-			title:     { type: 'string', default: '' },
-			lead:      { type: 'string', default: '' },
-			btn1Label: { type: 'string', default: '' },
-			btn1Url:   { type: 'string', default: '' },
-			btn2Label: { type: 'string', default: '' },
-			btn2Url:   { type: 'string', default: '' }
-		},
+		attributes: { preview: { type: 'object' } },
 		edit: heroEdit,
 		save: function () { return null; }
 	} );
@@ -300,11 +261,7 @@
 		title: __( 'CSD: Schnellzugriff', 'csd-darmstadt' ),
 		category: 'widgets', icon: 'grid-view',
 		supports: { html: false, reusable: false },
-		attributes: {
-			heading: { type: 'string', default: 'Schnellzugriff' },
-			tiles:   { type: 'array',  default: [] },
-			images:  { type: 'object', default: {} }
-		},
+		attributes: { preview: { type: 'object' } },
 		edit: quicklinksEdit,
 		save: function () { return null; }
 	} );
@@ -324,4 +281,4 @@
 	registerPlain( 'csd/footerlinks', __( 'CSD: Footer-Links',       'csd-darmstadt' ), 'editor-ul'    );
 
 } )( window.wp.blocks, window.wp.element, window.wp.serverSideRender,
-     window.wp.i18n, window.wp.blockEditor, window.wp.components, window.wp.apiFetch );
+     window.wp.i18n, window.wp.blockEditor, window.wp.components, window.wp.coreData );

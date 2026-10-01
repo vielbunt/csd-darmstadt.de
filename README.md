@@ -5,10 +5,27 @@ This is our custom WordPress theme for csd-darmstadt.de. It's built on top of Tw
 ## Setup
 
 1. Make sure Twenty Twenty-Five is installed (it doesn't have to be active, just present).
-2. Upload this theme via Design > Themes > Theme hinzufügen > Theme hochladen and activate it.
+2. The theme lives on the server in the folder `csddarmstadtzweinull`. Only the very first install is a manual upload (Design > Themes > Theme hinzufügen > Theme hochladen, the ZIP has to contain that folder name). After that, updates come in automatically, see below.
 3. The font (PT Sans) loads automaticaly from Google Fonts, nothing to do there.
 4. Go to Design > Editor and assign the correct navigation to the header nav block. It should pick up "Hauptnavigation" on its own but if it dosn't, just select it manually in the sidebar.
 5. Under Einstellungen > Lesen, set a static front page so the front-page template kicks in.
+
+## Updates and deployment
+
+Every push to `main` goes live on its own, usually within two or three minutes:
+
+1. The GitHub Action (`.github/workflows/deploy.yml`) checks the PHP syntax, `theme.json` and the JS, then boots a throwaway WordPress with the theme ([WordPress Playground](https://github.com/WordPress/wordpress-playground)) and loads a few pages. Any PHP error or warning stops everything right there, nothing reaches the server.
+2. It builds `theme.zip` (folder `csddarmstadtzweinull`, version = the one in `style.css` plus the run number, e.g. `2.2.0.17`) and publishes it as a GitHub release together with a small `release.json`.
+3. It calls `POST https://www.csd-darmstadt.de/wp-json/csd/v1/deploy` with the secret `DEPLOY_TOKEN`. WordPress downloads the release and installs it through its normal theme updater, into the existing folder. Content, menus and front page settings are not touched.
+4. Finally it loads the live front page and checks that hero and tiles are there.
+
+If the webhook ever fails, WordPress still sees the update under Dashboard > Aktualisierungen and installs it with its automatic background update (switched on for this theme).
+
+Status, last runs, an "update now" button and the token are under **Design > Theme-Updates** in wp-admin.
+
+**One-time setup for the webhook:** in wp-admin open Design > Theme-Updates, click "Token erzeugen", copy it into GitHub under Settings > Secrets and variables > Actions as `DEPLOY_TOKEN`. Alternatively define `CSD_DEPLOY_TOKEN` in `wp-config.php`.
+
+To bump the version for a bigger change just edit `Version:` in `style.css`, the run number is added automatically.
 
 ## Our custom blocks
 
@@ -26,7 +43,19 @@ We built these as server-side rendered blocks, so they show up correctly in the 
 
 ## Editing the Schnellzugriff and Hero in WordPress
 
-Just open Design > Editor, click on the block you want to edit and look at the right sidebar. The CSD Hero block has panels for "Texte", "Buttons" and "Hintergrundbild". The Schnellzugriff block has one collapsable panel per tile where you can change the title and URL. Colors and icons are fixed in the PHP and woud need a code change.
+Open Design > Editor, click on the block you want to edit and look at the right sidebar. The CSD Hero block has panels for "Texte", "Buttons" and "Hintergrundbild". The Schnellzugriff block has one collapsable panel per tile where you can change the title, URL and background image (with a small preview of the chosen image). The canvas updates right away, the changes are stored with the normal **Speichern** button. Empty fields show the grey default text. Colors and icons are fixed in the PHP and woud need a code change.
+
+### Why the tile images dont disappear anymore
+
+Up to 2.1.x the hero texts and tile images lived as block attributes inside the front-page template. WordPress re-serialises templates in PHP on every save and turns the image map `{"0":…,"1":…}` into a list `[…]`. The editor then rejects that list on the next load and every tile image is gone. On top of that, a theme re-upload or a template reset threw the attributes away.
+
+Since 2.2 all of this lives in one option, `csd_frontpage` (see `inc/frontpage.php`):
+
+- registered with a strict REST schema and edited through WordPress' own "site" entity, so it is saved with "Speichern" like everything else,
+- independent of the theme folder, the template and theme updates,
+- images are stored with their attachment ID (plus the URL as fallback).
+
+On the first page load after the update, the content is copied over once from the customised template and from the old options `csd_hero_settings` / `csd_quicklinks_settings` (those stay as a backup). The same migration also removes a few old HTML comments from the front-page template that made the editor flag the `<main>` group as "invalid content".
 
 ## Spendenkampagne (Donorbox goal meter + button)
 
