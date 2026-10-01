@@ -36,7 +36,7 @@ We built these as server-side rendered blocks, so they show up correctly in the 
 | `csd/hero` | the big hero section at the top of the front page. texts, buttons and background image are all editable in the site editor |
 | `csd/quicklinks` | the 8 coloured quick access tiles. title and URL are editable per tile in the site editor |
 | `csd/events` | the announcements grid, shows the 8 latest posts as tiles |
-| `csd/feed` | the "Weitere Ankündigungen" section, shows full post content starting from post 9 |
+| `csd/feed` | the "Weitere Ankündigungen" section, a compact list (picture, title, short text, date) starting from post 9 |
 | `csd/logo` | logo block, use `variant="csd"` for the CSD logo or `variant="vielbunt"` for the vielbunt logo |
 | `csd/footerlinks` | the footer nav links |
 | `csd/post-hero` | the purple hero banner on single posts and pages |
@@ -70,9 +70,11 @@ It ships **enabled** and pre-filled with the `csd-darmstadt-2026` campaign codes
 
 **How it's placed:** the band is *not* a block you drop into a template. It's appended right after the front-page hero via a `render_block` filter (`csd_render_campaign_after_hero`). This is deliberate — once `front-page` has been edited in the Site Editor it lives in the database and edits to `templates/front-page.html` are ignored, so anchoring on the hero block is the only reliable placement.
 
-## The yearly flag graphic
+## The CSD graphic and its date
 
-We keep the annual CSD graphic at `assets/flag-pic-2026.svg`. All the text in that file has been converted to paths already so it renders corectly without needing any fonts installed. When we make a new version for 2027, just replace that file and the hero will pick it up automaticaly.
+The graphic next to the hero text lives in `assets/flag.svg`. It has no fixed date anymore: the date comes from the hero block, panel **Grafik**, field "Datum in der Grafik" (format `21.08.2027`). The theme sets it in Cera Pro Bold with exactly the size, tracking and centring of the original artwork, so it looks hand-made in the design tool. No font file is loaded, the theme only ships the outlines of the digits 0 to 9 and the dot (`inc/flag-glyphs.php`). Leave the field empty and the graphic has no date. On phones the graphic is hidden on purpose.
+
+If the artwork itself changes one day, export it with the date as outlines (like the 2026 version) and run `python3 tools/flag-glyphs.py <Cera-Pro-Bold.otf> <new.svg>`, the script swaps the date for the placeholder and rebuilds the digit table.
 
 ## Colors
 
@@ -80,7 +82,7 @@ The main brand color is CSD purple `#6546B4`. In the theme it's registered under
 
 ## Font
 
-We load PT Sans from Google Fonts. Two weights, 400 and 700, both with italic variants. If the site ever needs to work fully offline or without Google, we'd have to self-host the font files.
+PT Sans (400 and 700, both with italics) ships with the theme in `assets/fonts` and is declared as `fontFace` in `theme.json`, so WordPress loads it in the frontend and the editor without asking Google. That keeps visitor IPs away from Google Fonts (GDPR). License: SIL Open Font License, see `assets/fonts/PT-Sans-OFL.txt`.
 
 ## Cera Pro note
 

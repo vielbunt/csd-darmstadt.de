@@ -12,6 +12,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 require_once get_stylesheet_directory() . '/inc/frontpage.php';
+require_once get_stylesheet_directory() . '/inc/flag-date.php';
+require_once get_stylesheet_directory() . '/inc/meta.php';
 require_once get_stylesheet_directory() . '/inc/deploy.php';
 
 /* updates straight from GitHub, see inc/deploy.php and Design > Theme-Updates */
@@ -53,13 +55,9 @@ function csd_editor_styles() {
 }
 add_action( 'after_setup_theme', 'csd_editor_styles' );
 
-/* PT Sans from Google Fonts, loaded for both frontend and the editor iframe */
-function csd_enqueue_fonts() {
-	$url = 'https://fonts.googleapis.com/css2?family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&display=swap';
-	wp_register_style( 'csd-pt-sans', $url );
-	wp_enqueue_style(  'csd-pt-sans' );
-}
-add_action( 'enqueue_block_assets', 'csd_enqueue_fonts' );
+/* PT Sans comes from the theme itself now (assets/fonts, declared as fontFace
+   in theme.json), so no visitor IP ends up at Google. WordPress loads it in the
+   frontend and in the editor on its own. */
 
 /* inline SVG icons used in the quick access tiles */
 function csd_icon( $name ) {
@@ -122,7 +120,7 @@ function csd_hero_defaults() {
 	return array(
 		'kicker'    => apply_filters( 'csd_hero_kicker', 'CHRISTOPHER STREET DAY DARMSTADT' ),
 		'title'     => apply_filters( 'csd_hero_title', 'Seid dabei.' ),
-		'lead'      => apply_filters( 'csd_hero_lead', 'Der CSD Darmstadt feiert queeres Leben in Darmstadt und Umgebung. Am 15. August 2026 gehen wir gemeinsam auf die Straße.' ),
+		'lead'      => apply_filters( 'csd_hero_lead', 'Der CSD Darmstadt feiert queeres Leben in Darmstadt und Umgebung. Komm mit uns auf die Straße.' ),
 		'btn1Label' => 'Mitmachen',
 		'btn1Url'   => home_url( '/mitmachen/' ),
 		'btn2Label' => 'Zur Anreise',
@@ -156,12 +154,8 @@ function csd_block_hero( $attributes = array() ) {
 		$media = apply_filters( 'csd_hero_media', 'linear-gradient(135deg,#2a1878,#6546b4)' );
 	}
 
-	/* inline the flag SVG so we can style it with CSS. swap this file for a transparent version when ready */
-	$flag_path = get_stylesheet_directory() . '/assets/flag-pic-2026.svg';
-	$flag_svg  = is_readable( $flag_path ) ? file_get_contents( $flag_path ) : '';
-	$flag_svg  = preg_replace( '/<\?xml.*?\?>/is', '', $flag_svg );
-	$flag_svg  = preg_replace( '/<!DOCTYPE.*?>/is', '', $flag_svg );
-	$flag_svg  = trim( $flag_svg );
+	/* the CSD graphic, date comes from the hero field (inc/flag-date.php) */
+	$flag_svg = csd_flag_svg( $hero['flagDate'] );
 
 	ob_start();
 	?>
@@ -190,15 +184,17 @@ function csd_block_hero( $attributes = array() ) {
 /* quick access tiles. colours and icons are hardcoded here,
    but title and URL can be overriden in the site editor per tile */
 function csd_default_tiles() {
+	/* only shown when a tile field in the editor is empty. labels without a
+	   year on purpose, so they dont go stale */
 	return array(
 		array( 'label' => 'After Show Party', 'url' => 'https://www.csd-darmstadt.de/after-show-party-centralstation/', 'color' => 'orange', 'icon' => 'smile'    ),
-		array( 'label' => 'Motto 2025',       'url' => 'https://www.csd-darmstadt.de/motto-2025/',                      'color' => 'purple', 'icon' => 'flag'     ),
-		array( 'label' => 'Pride Week 2025',  'url' => 'https://www.csd-darmstadt.de/csd-pride-week-2025/',             'color' => 'green',  'icon' => 'community'),
-		array( 'label' => 'Kontakt',          'url' => 'https://www.csd-darmstadt.de/kontakt/',                         'color' => 'blue',   'icon' => 'chat'     ),
-		array( 'label' => 'Fotos CSD 2025',   'url' => 'https://www.csd-darmstadt.de/2025/08/fotos-vom-csd-darmstadt-2025-in-arbeit/', 'color' => 'orange', 'icon' => 'camera'),
+		array( 'label' => 'Motto',            'url' => 'https://www.csd-darmstadt.de/motto-2026/',                      'color' => 'purple', 'icon' => 'flag'     ),
+		array( 'label' => 'Bühnenprogramm',   'url' => 'https://www.csd-darmstadt.de/buehnenprogramm-2/',               'color' => 'green',  'icon' => 'community'),
+		array( 'label' => 'Infostände',       'url' => 'https://www.csd-darmstadt.de/infostaende/',                     'color' => 'blue',   'icon' => 'chat'     ),
+		array( 'label' => 'Fotos',            'url' => 'https://www.csd-darmstadt.de/bilder2026/',                      'color' => 'orange', 'icon' => 'camera'   ),
 		array( 'label' => 'Videos',           'url' => 'https://www.csd-darmstadt.de/videos/',                          'color' => 'ink',    'icon' => 'video'    ),
 		array( 'label' => 'Anreise',          'url' => 'https://www.csd-darmstadt.de/anreise/',                         'color' => 'green',  'icon' => 'arrow'    ),
-		array( 'label' => 'Mitmachen!',       'url' => 'https://www.csd-darmstadt.de/mitmachen/',                       'color' => 'yellow', 'icon' => 'hand'     ),
+		array( 'label' => 'Demostrecke',      'url' => 'https://www.csd-darmstadt.de/demo-parade/',                     'color' => 'yellow', 'icon' => 'hand'     ),
 	);
 }
 
@@ -314,11 +310,13 @@ function csd_block_events( $attributes = array() ) {
 	return $out;
 }
 
-/* further announcements feed. starts at post 9 becuase the first 8 are already shown above */
+/* further announcements as a compact list (picture, title, short text, date).
+   starts at post 9 becuase the first 8 are already shown in the grid above.
+   until 2.2 this showed the full posts incl. all galleries, which made the
+   front page about 66.000px long */
 function csd_block_feed( $attributes = array() ) {
 	$limit = isset( $attributes['limit'] ) ? (int) $attributes['limit'] : 6;
 
-	/* skip the first 8 posts, those are already shown in the grid above */
 	$query = new WP_Query( array(
 		'post_type'           => 'post',
 		'post_status'         => 'publish',
@@ -334,51 +332,41 @@ function csd_block_feed( $attributes = array() ) {
 		return '<p class="vb-empty">' . esc_html__( 'Noch keine weiteren Beiträge.', 'csd-darmstadt' ) . '</p>';
 	}
 
-	/* save and restore the global $post so block rendering context stays intact */
-	global $post;
-	$saved_post = $post;
-
-	$out = '<div class="vb-feed vb-feed--full">';
+	$out = '<div class="vb-feed">';
 	foreach ( $query->posts as $wp_post ) {
-		$url  = get_permalink( $wp_post );
-		$cats = get_the_category( $wp_post->ID );
-		$cat  = ! empty( $cats ) ? $cats[0]->name : '';
+		$url     = get_permalink( $wp_post );
+		$title   = get_the_title( $wp_post );
+		$cats    = get_the_category( $wp_post->ID );
+		$cat     = ! empty( $cats ) ? $cats[0]->name : '';
+		$excerpt = wp_trim_words( wp_strip_all_tags( strip_shortcodes( $wp_post->post_excerpt ? $wp_post->post_excerpt : $wp_post->post_content ) ), 28 );
 
-		/* set post context so galleries and embeds render correctly */
-		$post = $wp_post;
-		setup_postdata( $post );
-		$rendered_content = apply_filters( 'the_content', $wp_post->post_content );
-
-		/* show the featured image as a full-width banner if one is set */
-		$banner_url = get_the_post_thumbnail_url( $wp_post, 'large' );
-		$banner_html = '';
-		if ( $banner_url ) {
-			$banner_html = sprintf(
-				'<a class="vb-feed__banner" href="%1$s"><img src="%2$s" alt="%3$s" loading="lazy" /></a>',
-				esc_url( $url ),
-				esc_url( $banner_url ),
-				esc_attr( get_the_title( $wp_post ) )
-			);
+		/* picture: featured image, otherwise the first image in the post */
+		$thumb = get_the_post_thumbnail( $wp_post, 'medium', array( 'alt' => '', 'loading' => 'lazy' ) );
+		if ( ! $thumb ) {
+			$img = csd_post_image( $wp_post );
+			if ( $img ) {
+				$thumb = '<img src="' . esc_url( $img ) . '" alt="" loading="lazy" />';
+			}
 		}
 
-		$out .= '<article class="vb-feed__row vb-feed__row--full">';
-		$out .= $banner_html;
+		$out .= '<article class="vb-feed__row">';
+		if ( $thumb ) {
+			$out .= '<a class="vb-feed__thumb" href="' . esc_url( $url ) . '" tabindex="-1" aria-hidden="true">' . $thumb . '</a>';
+		}
 		$out .= '<div class="vb-feed__body">';
 		if ( $cat ) {
 			$out .= '<span class="vb-feed__cat">' . esc_html( $cat ) . '</span>';
 		}
-		$out .= '<h3 class="vb-feed__title"><a href="' . esc_url( $url ) . '">' . esc_html( get_the_title( $wp_post ) ) . '</a></h3>';
+		$out .= '<h3 class="vb-feed__title"><a href="' . esc_url( $url ) . '">' . esc_html( $title ) . '</a></h3>';
+		if ( $excerpt ) {
+			$out .= '<p class="vb-feed__excerpt">' . esc_html( $excerpt ) . '</p>';
+		}
 		$out .= '<p class="vb-feed__meta">' . esc_html( get_the_date( '', $wp_post ) ) . '</p>';
-		$out .= '<div class="vb-feed__content entry-content">' . $rendered_content . '</div>';
 		$out .= '</div>';
 		$out .= '</article>';
 	}
 	$out .= '</div>';
-	$out .= '<p class="vb-feed__next-wrap"><a class="vb-feed__next" href="https://www.csd-darmstadt.de/page/2/">Nächste Seite →</a></p>';
-
-	/* restore the global post context */
-	$post = $saved_post;
-	wp_reset_postdata();
+	$out .= '<p class="vb-feed__next-wrap"><a class="vb-feed__next" href="' . esc_url( home_url( '/page/2/' ) ) . '">Nächste Seite →</a></p>';
 
 	return $out;
 }
@@ -424,12 +412,11 @@ function csd_block_logo( $attributes = array() ) {
 /* footer nav links */
 function csd_block_footerlinks( $attributes = array() ) {
 	$links = array(
-		array( 'CSD auf Facebook',       'http://www.facebook.com/csd-darmstadt' ),
+		array( 'CSD auf Facebook',       'https://www.facebook.com/csd-darmstadt' ),
 		array( 'vielbunt auf Instagram',  'https://instagram.com/vielbunt' ),
 		array( 'Datenschutzerklärung',    'https://www.csd-darmstadt.de/datenschutzerklaerung/' ),
 		array( 'Impressum',               'https://www.csd-darmstadt.de/impressum/' ),
 		array( 'Kontakt',                 'https://www.csd-darmstadt.de/kontakt/' ),
-		array( 'Login',                   'http://www.csd-darmstadt.de/wp-admin' ),
 	);
 	$out = '<nav class="vb-footerlinks" aria-label="' . esc_attr__( 'Links und Rechtliches', 'csd-darmstadt' ) . '">';
 	foreach ( $links as $l ) {

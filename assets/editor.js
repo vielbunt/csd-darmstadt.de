@@ -45,7 +45,7 @@
 	function normalize( raw ) {
 		var d    = JSON.parse( JSON.stringify( raw || {} ) );
 		var hero = d.hero || {};
-		[ 'kicker', 'title', 'lead', 'btn1Label', 'btn1Url', 'btn2Label', 'btn2Url', 'bgUrl' ].forEach( function ( k ) {
+		[ 'kicker', 'title', 'lead', 'btn1Label', 'btn1Url', 'btn2Label', 'btn2Url', 'bgUrl', 'flagDate' ].forEach( function ( k ) {
 			if ( typeof hero[ k ] !== 'string' ) { hero[ k ] = ''; }
 		} );
 		hero.bgId = parseInt( hero.bgId, 10 ) || 0;
@@ -160,6 +160,17 @@
 			field( TextControl, 'btn2Url', __( 'URL', 'csd-darmstadt' ) )
 		);
 
+		var flagPanel = el( PanelBody,
+			{ title: __( 'Grafik', 'csd-darmstadt' ), initialOpen: false },
+			el( TextControl, {
+				label: __( 'Datum in der Grafik', 'csd-darmstadt' ),
+				help: __( 'Format TT.MM.JJJJ, z. B. 21.08.2027. Wird automatisch zweizeilig in Cera Pro gesetzt. Leer lassen für die Grafik ohne Datum.', 'csd-darmstadt' ),
+				value: h.flagDate,
+				placeholder: '21.08.2027',
+				onChange: function ( v ) { update( function ( d ) { d.hero.flagDate = v.replace( /[^0-9.]/g, '' ); } ); }
+			} )
+		);
+
 		var bgPanel = el( PanelBody,
 			{ title: __( 'Hintergrundbild', 'csd-darmstadt' ), initialOpen: false },
 			imagePicker( h.bgId, h.bgUrl,
@@ -170,7 +181,7 @@
 		);
 
 		return el( Fragment, {},
-			elMany( InspectorControls, {}, [ textPanel, btnPanel, bgPanel ] ),
+			elMany( InspectorControls, {}, [ textPanel, flagPanel, btnPanel, bgPanel ] ),
 			el( ssr, { block: 'csd/hero', attributes: { preview: data }, httpMethod: 'POST' } )
 		);
 	}

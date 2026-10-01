@@ -19,7 +19,7 @@ env:
   THEME_SLUG: csddarmstadtzweinull
   SITE_URL: https://www.csd-darmstadt.de
   REST_NAMESPACE: csd/v1
-  SMOKE_MARKERS: "vb-hero vb-quick vb-tile"
+  SMOKE_MARKERS: "vb-hero vb-quick vb-tile csd-flag-date"
 
 jobs:
   test:

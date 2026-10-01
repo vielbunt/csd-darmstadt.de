@@ -1,7 +1,7 @@
 /*
 Theme Name: CSD Darmstadt
 Theme URI: https://www.csd-darmstadt.de
-Description: Child theme for csd-darmstadt.de built on top of Twenty Twenty-Five. Purple branding, PT Sans, custom blocks for hero and quick access tiles.
+Description: Child theme for csd-darmstadt.de built on top of Twenty Twenty-Five. Purple branding, PT Sans (self-hosted), custom blocks for hero and quick access tiles.
 Author: vielbunt e.V. – AK Öffentlichkeitsarbeit
 Author URI: https://www.vielbunt.org
 Template: twentytwentyfive
@@ -179,11 +179,10 @@ Text Domain: csd-darmstadt
 }
 .vb-quick__title { margin: 0 0 18px; color: var(--wp--preset--color--ink); }
 
-/* 4 columns on desktop, 2 on mobile. on mobile we hide tiles 7 and 8 */
+/* 4 columns on desktop, 2 on mobile. all 8 tiles everywhere, Anreise and Demostrecke matter most on the phone */
 .vb-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 @media (max-width: 781px) {
 	.vb-grid { grid-template-columns: repeat(2, 1fr); }
-	.vb-grid--quick .vb-tile:nth-child(n+7) { display: none; }
 }
 
 /* individual tiles */
@@ -228,66 +227,33 @@ Text Domain: csd-darmstadt
 .vb-card--img img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
 .vb-empty { color: #8b8399; font-weight: 500; }
 
-/* full content feed shown below the announcements grid */
+/* compact feed below the announcements grid: picture, title, short text, date */
 .vb-feed__row {
 	display: flex; gap: 20px; align-items: flex-start;
 	padding: 22px 0; border-bottom: 2px solid rgba(54,55,56,0.1);
 }
 .vb-feed__row:first-child { padding-top: 0; }
-
-/* stacked layout for full post content */
-.vb-feed__row--full {
-	flex-direction: column;
-	gap: 0;
-	padding: 36px 0;
-	border-bottom: 3px solid rgba(54,55,56,0.12);
-}
-.vb-feed__row--full:first-child { padding-top: 0; }
-
-/* featured image as banner */
-.vb-feed__banner { display: block; margin-bottom: 20px; }
-.vb-feed__banner img {
-	width: 100%; height: auto; display: block;
-	max-height: 480px; object-fit: cover; object-position: center top;
-}
+.vb-feed__thumb { flex: none; width: 120px; height: 120px; display: block; overflow: hidden; }
+.vb-feed__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.vb-feed__body { min-width: 0; }
 
 .vb-feed__cat {
 	font-size: 0.66rem; font-weight: 700; letter-spacing: 0.5px;
 	text-transform: uppercase; color: var(--wp--preset--color--purple);
 	display: block; margin-bottom: 6px;
 }
-.vb-feed__title { font-size: 1.35rem; font-weight: 800; letter-spacing: -0.5px; margin: 0 0 6px; line-height: 1.1; }
+.vb-feed__title { font-size: 1.2rem; font-weight: 800; letter-spacing: -0.4px; margin: 0 0 6px; line-height: 1.15; }
 .vb-feed__title a { color: var(--wp--preset--color--ink); text-decoration: none; }
 .vb-feed__title a:hover { text-decoration: underline; }
-.vb-feed__meta { font-size: 0.75rem; color: #9a9a9e; font-weight: 600; margin: 0 0 20px; }
+.vb-feed__excerpt { font-size: 0.92rem; color: #6f6f72; line-height: 1.45; margin: 0; }
+.vb-feed__meta { font-size: 0.75rem; color: #9a9a9e; font-weight: 600; margin: 6px 0 0; }
 
-/* rendered post content, has to handle everything gutenberg can throw at it */
-.vb-feed__content { line-height: 1.65; color: var(--wp--preset--color--ink); }
-.vb-feed__content p { margin-bottom: 1rem; }
-.vb-feed__content h1, .vb-feed__content h2, .vb-feed__content h3,
-.vb-feed__content h4, .vb-feed__content h5, .vb-feed__content h6 {
-	font-weight: 800; letter-spacing: -0.4px; line-height: 1.1;
-	margin: 1.5rem 0 0.5rem;
+@media (max-width: 600px) {
+	.vb-feed__row { gap: 14px; }
+	.vb-feed__thumb { width: 84px; height: 84px; }
+	.vb-feed__title { font-size: 1.05rem; }
+	.vb-feed__excerpt { font-size: 0.85rem; }
 }
-.vb-feed__content img { max-width: 100%; height: auto; display: block; }
-.vb-feed__content figure { margin: 1.25rem 0; }
-.vb-feed__content figcaption { font-size: 0.8rem; color: #6f6f72; margin-top: 6px; }
-.vb-feed__content ul, .vb-feed__content ol { padding-left: 1.5rem; margin-bottom: 1rem; }
-.vb-feed__content li { margin-bottom: 0.3rem; }
-.vb-feed__content a { color: var(--wp--preset--color--purple); }
-.vb-feed__content a:hover { text-decoration: underline; }
-.vb-feed__content blockquote {
-	border-left: 4px solid var(--wp--preset--color--purple);
-	padding-left: 18px; margin-left: 0; color: #555; font-style: italic;
-}
-/* WP block image classes */
-.vb-feed__content .wp-block-image img,
-.vb-feed__content .wp-block-gallery img { max-width: 100%; height: auto; }
-.vb-feed__content .wp-block-image { margin: 1.25rem 0; }
-
-/* fallback thumbnail for non-full feed rows */
-.vb-feed__thumb { flex: none; width: 120px; height: 120px; display: block; overflow: hidden; }
-.vb-feed__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
 .vb-feed__next-wrap { margin-top: 36px; text-align: center; }
 .vb-feed__next {

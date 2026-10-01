@@ -43,6 +43,7 @@ function csd_frontpage_empty() {
 			'btn2Url'   => '',
 			'bgId'      => 0,
 			'bgUrl'     => '',
+			'flagDate'  => '',
 		),
 		'quicklinks' => array(
 			'heading' => '',
@@ -116,6 +117,9 @@ function csd_frontpage_clean_field( $key, $value ) {
 	}
 	if ( 'lead' === $key ) {
 		return sanitize_textarea_field( (string) $value );
+	}
+	if ( 'flagDate' === $key ) {
+		return csd_flag_clean_date( $value );
 	}
 	return sanitize_text_field( (string) $value );
 }
@@ -250,6 +254,10 @@ function csd_frontpage_migrate() {
 
 	$new = csd_frontpage_empty();
 	foreach ( $new['hero'] as $key => $default ) {
+		if ( 'flagDate' === $key ) {
+			$new['hero'][ $key ] = CSD_FLAG_DATE_INITIAL;
+			continue;
+		}
 		$new['hero'][ $key ] = csd_frontpage_first(
 			isset( $hero_attrs[ $key ] ) ? $hero_attrs[ $key ] : '',
 			isset( $hero_old[ $key ] ) ? $hero_old[ $key ] : ''
@@ -308,6 +316,21 @@ function csd_frontpage_clean_template( $post_id, $content ) {
 	$wpdb->update( $wpdb->posts, array( 'post_content' => $cleaned ), array( 'ID' => $post_id ) );
 	clean_post_cache( $post_id );
 }
+
+/* 2.3: the date in the graphic became a field. sites that already have the
+   option get the date that was baked into the old artwork once, after that
+   the key exists and this does nothing anymore */
+define( 'CSD_FLAG_DATE_INITIAL', '21.08.2027' );
+
+function csd_frontpage_upgrade() {
+	$raw = get_option( CSD_FRONTPAGE_OPTION, false );
+	if ( ! is_array( $raw ) || ! isset( $raw['hero'] ) || ! is_array( $raw['hero'] ) || array_key_exists( 'flagDate', $raw['hero'] ) ) {
+		return;
+	}
+	$raw['hero']['flagDate'] = CSD_FLAG_DATE_INITIAL;
+	update_option( CSD_FRONTPAGE_OPTION, csd_frontpage_sanitize( $raw ) );
+}
+add_action( 'init', 'csd_frontpage_upgrade', 21 );
 
 /* defaults for the editor sidebar (placeholders), so they are only defined once in PHP */
 function csd_frontpage_editor_data() {
