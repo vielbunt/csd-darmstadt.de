@@ -290,6 +290,7 @@
 	registerPlain( 'csd/feed',        __( 'CSD: Alle Ankündigungen', 'csd-darmstadt' ), 'list-view'    );
 	registerPlain( 'csd/logo',        __( 'CSD: Logo',               'csd-darmstadt' ), 'flag',         { variant: { type: 'string' } } );
 	registerPlain( 'csd/footerlinks', __( 'CSD: Footer-Links',       'csd-darmstadt' ), 'editor-ul'    );
+	registerPlain( 'csd/archive',     __( 'CSD: Beitragsübersicht', 'csd-darmstadt' ), 'grid-view' );
 
 } )( window.wp.blocks, window.wp.element, window.wp.serverSideRender,
      window.wp.i18n, window.wp.blockEditor, window.wp.components, window.wp.coreData );

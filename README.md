@@ -83,6 +83,10 @@ If the artwork itself changes one day, export it with the date as outlines (like
 - **One-time steps:** `inc/once.php` holds things that should happen exactly once on the server after an update (e.g. switching off the FancyBox plugin, Autoptimize not touching Google Fonts). Results are listed under Design > Theme-Updates.
 - **Spenden buttons:** while the campaign is off, buttons that point to a CSD Donorbox campaign go to the general donation link from the Customizer (Spendenkampagne > "Spenden-Link ohne Kampagne", default vielbunt.org/spenden/).
 
+## Post overviews
+
+"Alle Beiträge" (`/beitraege/`, set as posts page), categories, tags and search use `inc/archive.php`: tiles in sharepic format 4:5 (`contain`, nothing gets cut off), filter buttons for the most used categories, 12 posts per page and a proper pagination. The front page links "Alle Beiträge →" and "Ältere Beiträge →" lead there.
+
 ## Search engines
 
 - `inc/seo.php`: category, tag, author and date archives, search results and `/page/2/` get `noindex` and are left out of the sitemap. Every page and post has a switch **"Nicht in Suchmaschinen anzeigen"** (sidebar, panel "Suchmaschinen") for old forms, past campaigns and so on, without deleting them. Pages have an excerpt field now, that text becomes the description Google shows.

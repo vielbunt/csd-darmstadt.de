@@ -17,8 +17,10 @@ require_once get_stylesheet_directory() . '/inc/meta.php';
 require_once get_stylesheet_directory() . '/inc/icons.php';
 require_once get_stylesheet_directory() . '/inc/seo.php';
 require_once get_stylesheet_directory() . '/inc/schema.php';
+require_once get_stylesheet_directory() . '/inc/archive.php';
 
 /* search engines: archives out, per-page switch and excerpts for pages, see inc/seo.php */
+vbarchive_setup( 'csd' );
 vbseo_setup( array( 'toggle' => true, 'page_excerpt' => true ) );
 require_once get_stylesheet_directory() . '/inc/deploy.php';
 require_once get_stylesheet_directory() . '/inc/once.php';
@@ -32,6 +34,7 @@ new Vielbunt_Theme_Deploy(
 		'once'      => array(
 			'2026-10-fancybox'     => array( 'FancyBox-Plugin abschalten (Theme hat jetzt eine eigene Lightbox)', 'vielbunt_once_disable_fancybox' ),
 			'2026-10-autoptimize'  => array( 'Autoptimize: Google Fonts entfernen, kein Preconnect zu Google', 'vielbunt_once_autoptimize_no_gfonts' ),
+			'2026-10-beitragsseite' => array( 'Seite "Alle Beiträge" anlegen und als Beitragsseite setzen', 'vbarchive_once_posts_page' ),
 			'2026-10-kampagne-aus' => array( 'Spendenkampagne 2026 ausschalten', 'csd_once_campaign_off' ),
 			'2026-10-auszuege'     => array( 'Auszüge (Google-Beschreibungen) für die wichtigsten Seiten', 'csd_once_page_excerpts' ),
 			'2026-10-suche'        => array( 'Suche aufräumen: Altlasten auf noindex, Titel und Menü ohne Jahreszahl, Kategorie umbenannt', 'csd_once_search_cleanup' ),
@@ -507,7 +510,9 @@ function csd_block_feed( $attributes = array() ) {
 		$out .= '</article>';
 	}
 	$out .= '</div>';
-	$out .= '<p class="vb-feed__next-wrap"><a class="vb-feed__next" href="' . esc_url( home_url( '/page/2/' ) ) . '">Nächste Seite →</a></p>';
+	/* page 2 of "Alle Beiträge" roughly continues where the front page stops */
+	$all  = vbarchive_posts_page_url();
+	$out .= '<p class="vb-feed__next-wrap"><a class="vb-feed__next" href="' . esc_url( $all ? trailingslashit( $all ) . 'page/2/' : home_url( '/category/news/' ) ) . '">Ältere Beiträge →</a></p>';
 
 	return $out;
 }
