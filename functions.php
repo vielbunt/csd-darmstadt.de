@@ -18,6 +18,8 @@ require_once get_stylesheet_directory() . '/inc/icons.php';
 require_once get_stylesheet_directory() . '/inc/seo.php';
 require_once get_stylesheet_directory() . '/inc/schema.php';
 require_once get_stylesheet_directory() . '/inc/archive.php';
+require_once get_stylesheet_directory() . '/inc/categorize.php';
+require_once get_stylesheet_directory() . '/inc/thumbnails.php';
 
 /* search engines: archives out, per-page switch and excerpts for pages, see inc/seo.php */
 vbarchive_setup( 'csd' );
@@ -36,6 +38,9 @@ new Vielbunt_Theme_Deploy(
 			'2026-10-autoptimize'  => array( 'Autoptimize: Google Fonts entfernen, kein Preconnect zu Google', 'vielbunt_once_autoptimize_no_gfonts' ),
 			'2026-10-beitragsseite' => array( 'Seite "Alle Beiträge" anlegen und als Beitragsseite setzen', 'vbarchive_once_posts_page' ),
 			'2026-10-startseite-statisch' => array( 'Einstellungen > Lesen: statische Startseite, damit die Beitragsseite greift', 'vbarchive_once_static_front' ),
+			'2026-10-kategorien-neu'   => array( 'Kategorien aufräumen (wie geprüft) und neue Themen-Kategorien', 'csd_once_categories' ),
+			'2026-10-beitragsbilder'   => array( 'Beitragsbilder aus dem ersten eigenen Bild im Text setzen', 'csd_once_thumbs' ),
+			'2026-10-menue'            => array( 'Menü: Beitragsübersicht verlinken', 'csd_once_menu' ),
 			'2026-10-kampagne-aus' => array( 'Spendenkampagne 2026 ausschalten', 'csd_once_campaign_off' ),
 			'2026-10-auszuege'     => array( 'Auszüge (Google-Beschreibungen) für die wichtigsten Seiten', 'csd_once_page_excerpts' ),
 			'2026-10-suche'        => array( 'Suche aufräumen: Altlasten auf noindex, Titel und Menü ohne Jahreszahl, Kategorie umbenannt', 'csd_once_search_cleanup' ),
@@ -153,6 +158,11 @@ function csd_once_page_excerpts() {
 		$set[] = $path;
 	}
 	return count( $set ) . ' Auszüge gesetzt' . ( $kept ? ', ' . count( $kept ) . ' vorhandene behalten (' . implode( ', ', $kept ) . ')' : '' );
+}
+
+/* wrapper for the one-time featured image step (inc/thumbnails.php) */
+function csd_once_thumbs() {
+	return vbthumb_once_backfill( 'csd' );
 }
 
 /* no campaign for 2027 yet, so the 2026 one goes off once. switch it back on

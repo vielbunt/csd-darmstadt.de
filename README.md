@@ -87,6 +87,11 @@ If the artwork itself changes one day, export it with the date as outlines (like
 
 "Alle Beiträge" (`/beitraege/`, set as posts page), categories, tags and search use `inc/archive.php`: tiles in sharepic format 4:5 (`contain`, nothing gets cut off), filter buttons for the most used categories, 12 posts per page and a proper pagination. The front page links "Alle Beiträge →" and "Ältere Beiträge →" lead there.
 
+## Categories and featured images
+
+- Every post has "News" plus one topic: Programm, Fotos & Rückblick, Aktionswoche, Motto, Mitmachen & Unterstützen, Andere CSDs, Verein, else CSD Allgemein. New posts get that automatically on publish if no topic was picked (`inc/categorize.php`). Cleanup of all posts in October 2026, backup in the option `csd_kategorien_backup`.
+- Missing featured images are taken from the first media library image in the text (`inc/thumbnails.php`).
+
 ## Search engines
 
 - `inc/seo.php`: category, tag, author and date archives, search results and `/page/2/` get `noindex` and are left out of the sitemap. Every page and post has a switch **"Nicht in Suchmaschinen anzeigen"** (sidebar, panel "Suchmaschinen") for old forms, past campaigns and so on, without deleting them. Pages have an excerpt field now, that text becomes the description Google shows.
