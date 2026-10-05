@@ -46,9 +46,11 @@ new Vielbunt_Theme_Deploy(
 			'2026-10-kampagne-aus' => array( 'Spendenkampagne 2026 ausschalten', 'csd_once_campaign_off' ),
 			'2026-10-auszuege'     => array( 'Auszüge (Google-Beschreibungen) für die wichtigsten Seiten', 'csd_once_page_excerpts' ),
 			'2026-10-suche'        => array( 'Suche aufräumen: Altlasten auf noindex, Titel und Menü ohne Jahreszahl, Kategorie umbenannt', 'csd_once_search_cleanup' ),
-			'2026-10-kachelbilder' => array( 'Kachelgröße 600 px für vorhandene Beitrags- und Startseitenbilder erzeugen', 'vbperf_once_card_sizes' ),
+			'2026-10-kachelbilder' => array( 'Kachelgröße 600 px (ersetzt durch WebP-Schritt)', '__return_empty_string' ),
 			'2026-10-wpo-cache'    => array( 'WP-Optimize: 7 Tage Cache, nachts vorladen, keine Handy-Kopie', 'vbperf_once_wpo_settings' ),
-			'2026-10-htaccess'     => array( '.htaccess: Cache-Dauer für JavaScript, Brotli, Schrägstrich-Weiterleitung per Apache', 'vbperf_once_htaccess' ),
+			'2026-10-htaccess'     => array( '.htaccess: Cache-Dauer für JavaScript, Brotli', 'vbperf_once_htaccess' ),
+			'2026-10-schraegstrich-weg' => array( '.htaccess: Schrägstrich-Regel wieder raus (Kurzlinks ohne / gingen kaputt)', 'vbperf_once_drop_slash_rule' ),
+			'2026-10-webp'             => array( 'Bilder als WebP neu rechnen (Zwischengrößen, Original bleibt)', 'vbperf_once_webp' ),
 		),
 	)
 );
