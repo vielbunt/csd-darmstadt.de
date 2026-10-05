@@ -113,7 +113,9 @@ function csd_frontpage_clean_field( $key, $value ) {
 		return '';
 	}
 	if ( 'Url' === substr( $key, -3 ) || 'url' === $key ) {
-		return esc_url_raw( trim( (string) $value ) );
+		$value = trim( (string) $value );
+		// own links always as https://www..., otherwise every click costs a redirect (inc/perf.php)
+		return esc_url_raw( function_exists( 'vbperf_own_url' ) ? vbperf_own_url( $value ) : $value );
 	}
 	if ( 'lead' === $key ) {
 		return sanitize_textarea_field( (string) $value );

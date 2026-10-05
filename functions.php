@@ -20,6 +20,8 @@ require_once get_stylesheet_directory() . '/inc/schema.php';
 require_once get_stylesheet_directory() . '/inc/archive.php';
 require_once get_stylesheet_directory() . '/inc/categorize.php';
 require_once get_stylesheet_directory() . '/inc/thumbnails.php';
+require_once get_stylesheet_directory() . '/inc/perf.php';
+require_once get_stylesheet_directory() . '/inc/embeds.php';
 
 /* search engines: archives out, per-page switch and excerpts for pages, see inc/seo.php */
 vbarchive_setup( 'csd' );
@@ -44,6 +46,9 @@ new Vielbunt_Theme_Deploy(
 			'2026-10-kampagne-aus' => array( 'Spendenkampagne 2026 ausschalten', 'csd_once_campaign_off' ),
 			'2026-10-auszuege'     => array( 'Auszüge (Google-Beschreibungen) für die wichtigsten Seiten', 'csd_once_page_excerpts' ),
 			'2026-10-suche'        => array( 'Suche aufräumen: Altlasten auf noindex, Titel und Menü ohne Jahreszahl, Kategorie umbenannt', 'csd_once_search_cleanup' ),
+			'2026-10-kachelbilder' => array( 'Kachelgröße 600 px für vorhandene Beitrags- und Startseitenbilder erzeugen', 'vbperf_once_card_sizes' ),
+			'2026-10-wpo-cache'    => array( 'WP-Optimize: 7 Tage Cache, nachts vorladen, keine Handy-Kopie', 'vbperf_once_wpo_settings' ),
+			'2026-10-htaccess'     => array( '.htaccess: Cache-Dauer für JavaScript, Brotli, Schrägstrich-Weiterleitung per Apache', 'vbperf_once_htaccess' ),
 		),
 	)
 );
@@ -193,16 +198,73 @@ function csd_enqueue_styles() {
 		wp_get_theme()->get( 'Version' ),
 		true
 	);
-	/* replaces the old FancyBox plugin, no jQuery needed */
-	wp_enqueue_script(
-		'csd-lightbox',
-		get_stylesheet_directory_uri() . '/assets/lightbox.js',
-		array(),
-		wp_get_theme()->get( 'Version' ),
-		array( 'in_footer' => true, 'strategy' => 'defer' )
-	);
+	/* the lightbox (replaces FancyBox) only loads on pages with image links now, see inc/perf.php */
 }
 add_action( 'wp_enqueue_scripts', 'csd_enqueue_styles' );
+
+/* ask for the two PT Sans files used above the fold right away with the HTML,
+   not only after the CSS. same URL WordPress prints in the @font-face rule */
+function csd_preload_fonts( $resources ) {
+	if ( is_admin() ) {
+		return $resources;
+	}
+	foreach ( array( 'pt-sans-latin-400-normal', 'pt-sans-latin-700-normal' ) as $f ) {
+		$resources[] = array(
+			'href'        => get_theme_file_uri( 'assets/fonts/' . $f . '.woff2' ),
+			'as'          => 'font',
+			'type'        => 'font/woff2',
+			'crossorigin' => 'anonymous',
+		);
+	}
+	return $resources;
+}
+add_filter( 'wp_preload_resources', 'csd_preload_fonts' );
+
+/* WP-Optimize empties the whole year folder (/2026/) on every post save, that
+   is the cache of every post from this year. we swap its handler for the same
+   purges without the recursion into the year (WP-Optimize 4.7). if the plugin
+   changes, remove_action fails and nothing changes */
+function csd_wpo_archive_purge_swap() {
+	if ( ! class_exists( 'WPO_Cache_Rules' ) || ! class_exists( 'WPO_Page_Cache' ) || empty( WPO_Cache_Rules::$instance ) ) {
+		return;
+	}
+	if ( remove_action( 'save_post', array( WPO_Cache_Rules::$instance, 'purge_archive_pages_on_post_update' ), 10 ) ) {
+		add_action( 'save_post_post', 'csd_wpo_purge_archives', 10, 2 );
+	}
+}
+add_action( 'init', 'csd_wpo_archive_purge_swap', 20 );
+
+function csd_wpo_purge_archives( $post_id, $post ) {
+	if ( ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) || wp_is_post_revision( $post_id ) || 'publish' !== get_post_status( $post_id ) ) {
+		return;
+	}
+	$blog = (int) get_option( 'page_for_posts' );
+	if ( $blog ) {
+		vbperf_purge_url( get_permalink( $blog ), true ); // /beitraege/ incl. /page/N/
+	}
+	$old_global      = isset( $GLOBALS['post'] ) ? $GLOBALS['post'] : null;
+	$GLOBALS['post'] = $post;
+	$adjacent        = array( get_previous_post(), get_next_post() );
+	$GLOBALS['post'] = $old_global;
+	foreach ( $adjacent as $adj ) {
+		if ( $adj ) {
+			vbperf_purge_url( get_permalink( $adj ) );
+		}
+	}
+	$y = get_post_time( 'Y', false, $post );
+	$m = get_post_time( 'm', false, $post );
+	foreach ( array( get_year_link( $y ), get_month_link( $y, $m ) ) as $archive ) {
+		vbperf_purge_url( $archive ); // only the archive page itself, not the posts below it
+		vbperf_purge_url( trailingslashit( $archive ) . 'page/', true );
+	}
+	$author = get_author_posts_url( (int) $post->post_author );
+	if ( $author ) {
+		vbperf_purge_url( $author, true );
+	}
+	foreach ( get_the_category( $post_id ) as $cat ) {
+		vbperf_purge_url( get_category_link( $cat ), true );
+	}
+}
 
 function csd_editor_styles() {
 	add_theme_support( 'editor-styles' );
@@ -283,6 +345,45 @@ function csd_hero_defaults() {
 	);
 }
 
+/* hero photo as a real <img> instead of a CSS background, so the browser finds
+   it right in the HTML, fetches it with high priority and picks a fitting size
+   from srcset. capped at 1536 px, the overlay is only 35 % on the left side so
+   a bit more resolution shows here than on vielbunt. falls back to the old
+   background (or the gradient) when there is no attachment */
+function csd_hero_media( $hero ) {
+	$id = (int) $hero['bgId'];
+	if ( ! $id && '' !== $hero['bgUrl'] ) {
+		$id = (int) attachment_url_to_postid( $hero['bgUrl'] );
+	}
+	if ( $id ) {
+		$cap = static function () {
+			return 1536;
+		};
+		add_filter( 'max_srcset_image_width', $cap );
+		$img = wp_get_attachment_image(
+			$id,
+			'large',
+			false,
+			array(
+				'class'         => 'vb-hero__media',
+				'alt'           => '',
+				'aria-hidden'   => 'true',
+				'sizes'         => '100vw',
+				'loading'       => false,
+				'fetchpriority' => 'high',
+				'decoding'      => 'async',
+			)
+		);
+		remove_filter( 'max_srcset_image_width', $cap );
+		if ( $img ) {
+			return $img;
+		}
+	}
+	$bg    = csd_frontpage_image( $hero['bgId'], $hero['bgUrl'], 'large' );
+	$media = '' !== $bg ? 'url(' . esc_url( $bg ) . ')' : apply_filters( 'csd_hero_media', 'linear-gradient(135deg,#2a1878,#6546b4)' );
+	return '<div class="vb-hero__media" aria-hidden="true" style="background-image:' . esc_attr( $media ) . '"></div>';
+}
+
 /* hero block. content comes from the csd_frontpage option (see inc/frontpage.php),
    empty fields fall back to the defaults above */
 function csd_block_hero( $attributes = array() ) {
@@ -302,12 +403,7 @@ function csd_block_hero( $attributes = array() ) {
 	$btn2_label = $hero['btn2Label'];
 	$btn2_url   = $hero['btn2Url'];
 
-	$bg = csd_frontpage_image( $hero['bgId'], $hero['bgUrl'], 'full' );
-	if ( '' !== $bg ) {
-		$media = 'url(' . esc_url( $bg ) . ')';
-	} else {
-		$media = apply_filters( 'csd_hero_media', 'linear-gradient(135deg,#2a1878,#6546b4)' );
-	}
+	$media_html = csd_hero_media( $hero );
 
 	/* the CSD graphic, date comes from the hero field (inc/flag-date.php) */
 	$flag_svg = csd_flag_svg( $hero['flagDate'] );
@@ -315,7 +411,7 @@ function csd_block_hero( $attributes = array() ) {
 	ob_start();
 	?>
 	<section class="vb-hero csd-hero">
-		<div class="vb-hero__media" aria-hidden="true" style="background-image:<?php echo esc_attr( $media ); ?>"></div>
+		<?php echo $media_html; // phpcs:ignore WordPress.Security.EscapeOutput -- escaped in csd_hero_media() ?>
 		<div class="vb-bars-anim" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
 		<div class="vb-hero__text">
 			<?php if ( $flag_svg ) : ?>
@@ -353,6 +449,39 @@ function csd_default_tiles() {
 	);
 }
 
+/* tile picture: the tiles are 170 to 300 px wide under a 78 % colour shade.
+   as <img> with srcset the browser takes the 300 or 768 file instead of the
+   1024 one, low priority so the hero photo comes first */
+function csd_tile_image( $id, $url ) {
+	$id = (int) $id;
+	if ( ! $id && '' !== (string) $url ) {
+		$id = (int) attachment_url_to_postid( $url );
+	}
+	if ( $id ) {
+		$img = wp_get_attachment_image(
+			$id,
+			'medium_large',
+			false,
+			array(
+				'class'         => 'vb-tile__bg',
+				'alt'           => '',
+				'aria-hidden'   => 'true',
+				'sizes'         => '(max-width: 781px) calc(50vw - 28px), 300px',
+				'loading'       => 'lazy',
+				'fetchpriority' => 'low',
+				'decoding'      => 'async',
+			)
+		);
+		if ( $img ) {
+			return $img;
+		}
+	}
+	if ( '' !== (string) $url ) { // only a URL, no attachment: background like before
+		return sprintf( '<span class="vb-tile__bg" style="background-image:url(%s)"></span>', esc_url( $url ) );
+	}
+	return '';
+}
+
 function csd_block_quicklinks( $attributes = array() ) {
 	$data     = csd_frontpage_for_render( $attributes );
 	$saved    = $data['quicklinks'];
@@ -370,7 +499,7 @@ function csd_block_quicklinks( $attributes = array() ) {
 			'color' => $default['color'],
 			'icon'  => $default['icon'],
 		);
-		$images[ $i ] = array( 'url' => csd_frontpage_image( $override['imgId'], $override['imgUrl'] ) );
+		$images[ $i ] = csd_tile_image( $override['imgId'], $override['imgUrl'] );
 	}
 
 	$heading = '' !== $saved['heading'] ? $saved['heading'] : 'Schnellzugriff';
@@ -383,17 +512,10 @@ function csd_block_quicklinks( $attributes = array() ) {
 		$icon  = $t['icon'];
 		$hexc  = isset( $hex[ $color ] ) ? $hex[ $color ] : '#6546B4';
 
-		$img_url = '';
-		if ( isset( $images[ $i ]['url'] ) && '' !== $images[ $i ]['url'] ) {
-			$img_url = $images[ $i ]['url'];
-		}
-		$layers = '';
+		$layers  = isset( $images[ $i ] ) ? $images[ $i ] : '';
+		$img_url = '' !== $layers;
 		if ( $img_url ) {
-			$layers = sprintf(
-				'<span class="vb-tile__bg" style="background-image:url(%1$s)"></span><span class="vb-tile__shade" style="background:%2$s"></span>',
-				esc_url( $img_url ),
-				esc_attr( $hexc )
-			);
+			$layers .= sprintf( '<span class="vb-tile__shade" style="background:%s"></span>', esc_attr( $hexc ) );
 		}
 
 		$grid .= sprintf(
@@ -438,10 +560,14 @@ function csd_block_events( $attributes = array() ) {
 	$i   = 0;
 	foreach ( $query->posts as $post ) {
 		$url  = get_permalink( $post );
-		$img  = csd_post_image( $post );
 		$date = get_the_date( 'd.m.Y', $post );
+		/* featured image with srcset, phones take the 600 file instead of 1024 px */
+		$tag  = vbperf_card_image( $post, get_the_title( $post ), '(max-width: 781px) calc(50vw - 28px), 300px' );
+		$img  = '' === $tag ? csd_post_image( $post ) : '';
 
-		if ( $img ) {
+		if ( '' !== $tag ) {
+			$out .= '<a class="vb-card vb-card--img" href="' . esc_url( $url ) . '">' . $tag . '</a>';
+		} elseif ( $img ) {
 			$alt  = esc_attr( get_the_title( $post ) );
 			$out .= sprintf(
 				'<a class="vb-card vb-card--img" href="%1$s"><img src="%2$s" alt="%3$s" loading="lazy" /></a>',
@@ -590,12 +716,7 @@ function csd_block_post_hero( $attributes = array() ) {
 		return '';
 	}
 
-	$img = get_the_post_thumbnail_url( $post_id, 'full' );
-	if ( $img ) {
-		$media = 'url(' . esc_url( $img ) . ')';
-	} else {
-		$media = 'linear-gradient(135deg,#2a1878,#6546b4)';
-	}
+	$media_html = vbperf_post_hero_media( $post_id, 'linear-gradient(135deg,#2a1878,#6546b4)' );
 
 	$title  = get_the_title( $post_id );
 	$kicker = '';
@@ -607,7 +728,7 @@ function csd_block_post_hero( $attributes = array() ) {
 	ob_start();
 	?>
 	<section class="vb-hero vb-hero--post">
-		<div class="vb-hero__media" aria-hidden="true" style="background-image:<?php echo esc_attr( $media ); ?>"></div>
+		<?php echo $media_html; // phpcs:ignore WordPress.Security.EscapeOutput -- escaped in vbperf_post_hero_media() ?>
 		<div class="vb-bars-anim" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
 		<div class="vb-hero__text">
 			<div class="csd-hero__content">
